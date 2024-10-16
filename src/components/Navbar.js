@@ -84,7 +84,7 @@ function Navbar() {
             <StyledLink to="/contact">Contact us</StyledLink>
           </MenuItem>
           <MenuItem onClick={handleMenuClose}>
-            <StyledLink to="/dashboard">My Dashboard</StyledLink>
+            <StyledLink to="/profile">My Dashboard</StyledLink>
           </MenuItem>
         </Menu>
       </Toolbar>
