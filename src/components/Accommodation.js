@@ -4,7 +4,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { ref, getDownloadURL, listAll } from "firebase/storage";
 import { Card, CardMedia, CardContent, Typography, Button, Grid, Box, Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { Carousel } from 'react-responsive-carousel';
-import 'react-responsive-carousel/lib/styles/carousel.min.css';
+import 'react-responsive-carousel/lib/styles/carousel.min.css'; 
 
 function Accommodation() {
   const [accommodations, setAccommodations] = useState([]);
@@ -52,24 +52,26 @@ function Accommodation() {
   };
 
   const carouselSettings = {
-    showThumbs: false,      // Remove thumbnails
-    showStatus: false,      // Remove status indicator
-    showIndicators: false,  // Remove dot indicators
-    infiniteLoop: true,     // Enable infinite loop
-    useKeyboardArrows: true, // Enable keyboard navigation
-    autoPlay: false,        // Disable autoplay
-    emulateTouch: true,     // Enable touch/swipe on desktop
-    swipeable: true,        // Enable touch/swipe on mobile
+    showThumbs: false,
+    showStatus: false,
+    showIndicators: false,
+    infiniteLoop: true,
+    useKeyboardArrows: true,
+    autoPlay: false,
+    emulateTouch: true,
+    swipeable: true,
   };
 
   return (
-    <Box sx={{ flexGrow: 1, padding: 4 }}>
-      <Typography varient="h1" sx={{ textAlign: 'center', fontSize: '2rem', }}>Accommodations</Typography>
+    <Box sx={{ flexGrow: 1, padding: 2 }}>
+      <Typography varient="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3 }}>
+        Accommodations
+      </Typography>
       
-      <Grid container spacing={2}>
+      <Grid container spacing={1} justifyContent="center">
         {accommodations.map((accommodation) => (
-          <Grid item xs={12} md={6} lg={4} key={accommodation.id}>
-            <Card sx={{ maxWidth: 345 }}>
+          <Grid item xs={12} sm={6} md={3} key={accommodation.id} sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Card sx={{ width: '100%', maxWidth: 280, m: 0.5 }}>
               <CardMedia
                 component="img"
                 height="200"
