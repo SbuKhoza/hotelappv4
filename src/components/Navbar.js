@@ -75,7 +75,7 @@ function Navbar() {
             <StyledLink to="/">Home</StyledLink>
           </MenuItem>
           <MenuItem onClick={handleMenuClose}>
-            <StyledLink to="/accommodation">Accommodations</StyledLink>
+            <StyledLink to="/accommodationpage">Accommodations</StyledLink>
           </MenuItem>
           <MenuItem onClick={handleMenuClose}>
             <StyledLink to="/about">About</StyledLink>
