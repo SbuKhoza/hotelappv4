@@ -1,37 +1,84 @@
 import React, { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { db, storage } from '../service/Firebase';
 import { collection, getDocs } from "firebase/firestore";
 import { ref, getDownloadURL, listAll } from "firebase/storage";
-import { Card, CardMedia, CardContent, Typography, Button, Grid, Box, Dialog, DialogContent, DialogTitle } from '@mui/material';
+import { 
+  Card, 
+  CardMedia, 
+  CardContent, 
+  Typography, 
+  Button, 
+  Grid, 
+  Box, 
+  Dialog, 
+  DialogContent, 
+  DialogTitle, 
+  TextField, 
+  DialogActions,
+  Alert, 
+  Snackbar,
+  CircularProgress
+} from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
-import 'react-responsive-carousel/lib/styles/carousel.min.css'; 
+import 'react-responsive-carousel/lib/styles/carousel.min.css';
+import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
 
 function Accommodation() {
-  const [accommodations, setAccommodations] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [selectedAccommodation, setSelectedAccommodation] = useState(null);
+  const dispatch = useDispatch();
+  const bookingStatus = useSelector((state) => state.booking.status);
+  const bookingError = useSelector((state) => state.booking.error);
 
+  // States
+  const [accommodations, setAccommodations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [selectedAccommodation, setSelectedAccommodation] = useState(null);
+  const [bookingData, setBookingData] = useState({
+    checkInDate: null,
+    checkOutDate: null,
+  });
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  // Fetch accommodations on component mount
   useEffect(() => {
     const fetchAccommodations = async () => {
-      const accommodationCollection = collection(db, 'accommodation');
-      const accommodationSnapshot = await getDocs(accommodationCollection);
-      const accommodationList = await Promise.all(accommodationSnapshot.docs.map(async (doc) => {
-        const data = doc.data();
-        const imagesRef = ref(storage, `accommodations/${doc.id}`);
-        const imagesList = await listAll(imagesRef);
-        const imageUrls = await Promise.all(
-          imagesList.items.map((imageRef) => getDownloadURL(imageRef))
-        );
-        return { ...data, id: doc.id, imageUrls };
-      }));
+      try {
+        const accommodationCollection = collection(db, 'accommodation');
+        const accommodationSnapshot = await getDocs(accommodationCollection);
+        const accommodationList = await Promise.all(accommodationSnapshot.docs.map(async (doc) => {
+          const data = doc.data();
+          const imagesRef = ref(storage, `accommodations/${doc.id}`);
+          try {
+            const imagesList = await listAll(imagesRef);
+            const imageUrls = await Promise.all(
+              imagesList.items.map((imageRef) => getDownloadURL(imageRef))
+            );
+            return { ...data, id: doc.id, imageUrls };
+          } catch (error) {
+            console.error(`Error fetching images for accommodation ${doc.id}:`, error);
+            return { ...data, id: doc.id, imageUrls: [] };
+          }
+        }));
 
-      console.log("Fetched accommodations:", accommodationList);
-      setAccommodations(accommodationList);
+        setAccommodations(accommodationList);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching accommodations:", error);
+        setError("Failed to load accommodations. Please try again later.");
+        setLoading(false);
+      }
     };
 
     fetchAccommodations();
   }, []);
 
+  // Handle viewing accommodation details
   const handleClickOpen = (accommodation) => {
     setSelectedAccommodation(accommodation);
     setOpen(true);
@@ -42,6 +89,56 @@ function Accommodation() {
     setSelectedAccommodation(null);
   };
 
+  // Handle booking dialog
+  const handleBookingOpen = (accommodation) => {
+    setSelectedAccommodation(accommodation);
+    setBookingOpen(true);
+  };
+
+  const handleBookingClose = () => {
+    setBookingOpen(false);
+    setBookingData({
+      checkInDate: null,
+      checkOutDate: null,
+    });
+  };
+
+  // Handle booking submission
+  const handleBookingSubmit = async () => {
+    if (!bookingData.checkInDate || !bookingData.checkOutDate) {
+      setSnackbarOpen(true);
+      return;
+    }
+
+    if (bookingData.checkInDate >= bookingData.checkOutDate) {
+      setError("Check-out date must be after check-in date");
+      setSnackbarOpen(true);
+      return;
+    }
+
+    const bookingPayload = {
+      accommodationId: selectedAccommodation.id,
+      accommodationName: selectedAccommodation.name,
+      checkInDate: bookingData.checkInDate.toISOString(),
+      checkOutDate: bookingData.checkOutDate.toISOString(),
+      price: selectedAccommodation.price,
+      userId: 'guest', // Update this when authentication is implemented
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await dispatch(createBooking(bookingPayload)).unwrap();
+      handleBookingClose();
+      setSnackbarOpen(true);
+    } catch (error) {
+      console.error('Booking failed:', error);
+      setError(error.message);
+      setSnackbarOpen(true);
+    }
+  };
+
+  // Helper function to get amenities list
   const getAmenitiesList = (amenities) => {
     if (typeof amenities === 'object' && amenities !== null) {
       return Object.keys(amenities)
@@ -51,10 +148,11 @@ function Accommodation() {
     return [];
   };
 
+  // Carousel settings
   const carouselSettings = {
     showThumbs: false,
     showStatus: false,
-    showIndicators: false,
+    showIndicators: true,
     infiniteLoop: true,
     useKeyboardArrows: true,
     autoPlay: false,
@@ -62,42 +160,67 @@ function Accommodation() {
     swipeable: true,
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ flexGrow: 1, padding: 2 }}>
-      <Typography varient="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3 }}>
+      <Typography variant="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3 }}>
         Accommodations
       </Typography>
       
-      <Grid container spacing={1} justifyContent="center">
+      {/* Accommodations Grid */}
+      <Grid container spacing={2} justifyContent="center">
         {accommodations.map((accommodation) => (
-          <Grid item xs={12} sm={6} md={3} key={accommodation.id} sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Card sx={{ width: '100%', maxWidth: 280, m: 0.5 }}>
+          <Grid item xs={12} sm={6} md={4} lg={3} key={accommodation.id}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardMedia
                 component="img"
                 height="200"
-                image={accommodation.imageUrls[0] || 'defaultImage.jpg'}
+                image={accommodation.imageUrls[0] || '/placeholder-image.jpg'}
                 alt={accommodation.name}
+                sx={{ objectFit: 'cover' }}
               />
-              <CardContent>
+              <CardContent sx={{ flexGrow: 1 }}>
                 <Typography gutterBottom variant="h5" component="div">
                   {accommodation.name}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {accommodation.description}
                 </Typography>
-                <Typography variant="subtitle1" sx={{ mt: 2 }}>
+                <Typography variant="subtitle1">
                   Guests: {accommodation.guests || 'Not specified'}
                 </Typography>
                 <Typography variant="subtitle1">
-                  Amenities: {getAmenitiesList(accommodation.amenities).join(', ') || 'No amenities available'}
+                  Amenities: {getAmenitiesList(accommodation.amenities).join(', ') || 'None listed'}
                 </Typography>
                 <Typography variant="h6" sx={{ mt: 2 }}>
                   Price: {accommodation.price}
                 </Typography>
               </CardContent>
-              <Box sx={{ padding: 2 }}>
-                <Button variant="contained" color="primary" fullWidth onClick={() => handleClickOpen(accommodation)}>
-                  View
+              <Box sx={{ p: 2, mt: 'auto' }}>
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  fullWidth 
+                  onClick={() => handleClickOpen(accommodation)}
+                >
+                  View Details
                 </Button>
               </Box>
             </Card>
@@ -105,6 +228,7 @@ function Accommodation() {
         ))}
       </Grid>
 
+      {/* Details Dialog */}
       <Dialog 
         open={open} 
         onClose={handleClose} 
@@ -112,21 +236,11 @@ function Accommodation() {
         fullWidth
         sx={{
           '& .MuiDialog-paper': { 
-            width: '60%', 
-            height: '90vh',
+            width: '90%', 
+            maxHeight: '90vh',
             '& .carousel .slide img': {
               maxHeight: '50vh',
               objectFit: 'contain'
-            },
-            '& .carousel .control-arrow': {
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
-              padding: '20px',
-              opacity: 0.8,
-              transition: 'opacity 0.2s ease-in-out',
-              '&:hover': {
-                opacity: 1,
-                backgroundColor: 'rgba(0, 0, 0, 0.5)'
-              }
             }
           }
         }}
@@ -135,7 +249,7 @@ function Accommodation() {
           <>
             <DialogTitle>{selectedAccommodation.name}</DialogTitle>
             <DialogContent>
-              <Box sx={{ height: '50vh', marginBottom: '16px' }}>
+              <Box sx={{ mb: 2 }}>
                 <Carousel {...carouselSettings}>
                   {selectedAccommodation.imageUrls.map((url, index) => (
                     <div key={index}>
@@ -148,25 +262,114 @@ function Accommodation() {
                   ))}
                 </Carousel>
               </Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
+              <Typography variant="body1" paragraph>
                 {selectedAccommodation.description}
               </Typography>
-              <Typography variant="subtitle1">
+              <Typography variant="subtitle1" gutterBottom>
                 Guests: {selectedAccommodation.guests || 'Not specified'}
               </Typography>
               <Typography variant="subtitle1" gutterBottom>
-                Amenities: {getAmenitiesList(selectedAccommodation.amenities).join(', ') || 'No amenities available'}
+                Amenities: {getAmenitiesList(selectedAccommodation.amenities).join(', ') || 'None listed'}
               </Typography>
               <Typography variant="h6" gutterBottom>
                 Price: {selectedAccommodation.price}
               </Typography>
-              <Button variant="contained" color="primary" fullWidth onClick={() => alert('Booking confirmed!')}>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                fullWidth 
+                onClick={() => {
+                  handleClose();
+                  handleBookingOpen(selectedAccommodation);
+                }}
+                sx={{ mt: 2 }}
+              >
                 Book Now
               </Button>
             </DialogContent>
           </>
         )}
       </Dialog>
+
+      {/* Booking Dialog */}
+      <Dialog 
+        open={bookingOpen} 
+        onClose={handleBookingClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Book Accommodation</DialogTitle>
+        <DialogContent>
+          {selectedAccommodation && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                {selectedAccommodation.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Price: {selectedAccommodation.price}
+              </Typography>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <Box sx={{ mt: 3, mb: 2 }}>
+                  <DateTimePicker
+                    label="Check-in Date & Time"
+                    value={bookingData.checkInDate}
+                    onChange={(newValue) => {
+                      setBookingData(prev => ({ ...prev, checkInDate: newValue }));
+                    }}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDateTime={new Date()}
+                  />
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <DateTimePicker
+                    label="Check-out Date & Time"
+                    value={bookingData.checkOutDate}
+                    onChange={(newValue) => {
+                      setBookingData(prev => ({ ...prev, checkOutDate: newValue }));
+                    }}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDateTime={bookingData.checkInDate || new Date()}
+                  />
+                </Box>
+              </LocalizationProvider>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleBookingClose}>Cancel</Button>
+          <Button 
+            onClick={handleBookingSubmit} 
+            variant="contained" 
+            color="primary"
+            disabled={bookingStatus === 'loading'}
+          >
+            {bookingStatus === 'loading' ? <CircularProgress size={24} /> : 'Confirm Booking'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSnackbarOpen(false);
+          dispatch(clearBookingStatus());
+        }}
+      >
+        <Alert 
+          onClose={() => {
+            setSnackbarOpen(false);
+            dispatch(clearBookingStatus());
+          }} 
+          severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
+          sx={{ width: '100%' }}
+        >
+          {bookingStatus === 'succeeded' 
+            ? 'Booking confirmed successfully!' 
+            : error || bookingError || 'Please fill in all required fields'}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
