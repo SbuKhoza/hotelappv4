@@ -159,6 +159,7 @@ function Accommodation() {
     autoPlay: false,
     emulateTouch: true,
     swipeable: true,
+    showArrows: true,
   };
 
   // Loading state
