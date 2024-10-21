@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { db, storage } from '../service/Firebase';
 import { collection, getDocs } from "firebase/firestore";
 import { ref, getDownloadURL, listAll } from "firebase/storage";
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { 
   Card, 
   CardMedia, 
@@ -27,11 +29,54 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
+import { createPaymentIntent } from '../redux/slices/PaymentSlice';
+
+const stripePromise = loadStripe('your_publishable_key');
+
+const PaymentForm = ({ clientSecret, onPaymentSuccess, onPaymentError, amount }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!stripe || !elements) return;
+
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: {
+        card: elements.getElement(CardElement),
+      },
+    });
+
+    if (error) {
+      onPaymentError(error.message);
+    } else {
+      onPaymentSuccess(paymentIntent);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <CardElement />
+      <Button 
+        type="submit" 
+        variant="contained" 
+        color="primary" 
+        fullWidth 
+        sx={{ mt: 2 }}
+        disabled={!stripe}
+      >
+        Pay ${amount}
+      </Button>
+    </form>
+  );
+};
+
 
 function Accommodation() {
   const dispatch = useDispatch();
   const bookingStatus = useSelector((state) => state.booking.status);
   const bookingError = useSelector((state) => state.booking.error);
+  
 
   // States
   const [accommodations, setAccommodations] = useState([]);
@@ -45,6 +90,9 @@ function Accommodation() {
     checkOutDate: null,
   });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [clientSecret, setClientSecret] = useState(null);
+  const [bookingPayload, setBookingPayload] = useState(null);
 
   // Fetch accommodations on component mount
   useEffect(() => {
@@ -110,26 +158,43 @@ function Accommodation() {
       setSnackbarOpen(true);
       return;
     }
-
+  
     if (bookingData.checkInDate >= bookingData.checkOutDate) {
       setError("Check-out date must be after check-in date");
       setSnackbarOpen(true);
       return;
     }
-
+  
     const bookingPayload = {
       accommodationId: selectedAccommodation.id,
       accommodationName: selectedAccommodation.name,
       checkInDate: bookingData.checkInDate.toISOString(),
       checkOutDate: bookingData.checkOutDate.toISOString(),
       price: selectedAccommodation.price,
-      userId: 'guest', // Update this when authentication is implemented
+      userId: 'guest',
       status: 'pending',
       createdAt: new Date().toISOString()
     };
-
+  
     try {
-      await dispatch(createBooking(bookingPayload)).unwrap();
+      // Create payment intent first
+      const paymentIntent = await dispatch(createPaymentIntent(bookingPayload)).unwrap();
+      setPaymentDialogOpen(true);
+      setClientSecret(paymentIntent.clientSecret);
+    } catch (error) {
+      console.error('Payment intent creation failed:', error);
+      setError(error.message);
+      setSnackbarOpen(true);
+    }
+  };
+
+  const handlePaymentSuccess = async (paymentIntent) => {
+    try {
+      await dispatch(createBooking({
+        ...bookingPayload,
+        paymentId: paymentIntent.id
+      })).unwrap();
+      setPaymentDialogOpen(false);
       handleBookingClose();
       setSnackbarOpen(true);
     } catch (error) {
@@ -372,6 +437,31 @@ function Accommodation() {
             : error || bookingError || 'Please fill in all required fields'}
         </Alert>
       </Snackbar>
+
+      <Dialog 
+        open={paymentDialogOpen} 
+        onClose={() => setPaymentDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        >
+        <DialogTitle>Complete Payment</DialogTitle>
+    <DialogContent>
+      {clientSecret && (
+      <Elements stripe={stripePromise}>
+        <PaymentForm 
+          clientSecret={clientSecret}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentError={(error) => {
+            setError(error);
+            setSnackbarOpen(true);
+          }}
+          amount={selectedAccommodation?.price}
+        />
+      </Elements>
+      )}
+    </DialogContent>
+    </Dialog>
+
     </Box>
   );
 }
