@@ -13,18 +13,21 @@ const Banner = () => {
 
   return (
     <div className="relative w-full h-[500px] overflow-hidden">
-      <video 
-        className={`w-full h-full object-cover transition-transform duration-[10000ms] ease-in-out ${
-          isZoomed ? 'scale-110' : 'scale-100'
-        }`}
-        autoPlay
-        muted
-        loop
-        playsInline
-      >
-        <source src="/images/banner.mp4" type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+      <div className="absolute inset-0 w-screen">
+        <video 
+          className={`w-full h-full object-cover transition-transform duration-[10000ms] ease-in-out ${
+            isZoomed ? 'scale-110' : 'scale-100'
+          }`}
+          autoPlay
+          muted
+          loop
+          playsInline
+          style={{ minWidth: '100vw' }}
+        >
+          <source src="/images/banner.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
     </div>
   );
 };
