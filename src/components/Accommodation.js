@@ -3,20 +3,20 @@ import { useDispatch, useSelector } from 'react-redux';
 import { db, storage } from '../service/Firebase';
 import { collection, getDocs } from "firebase/firestore";
 import { ref, getDownloadURL, listAll } from "firebase/storage";
-import { 
-  Card, 
-  CardMedia, 
-  CardContent, 
-  Typography, 
-  Button, 
-  Grid, 
-  Box, 
-  Dialog, 
-  DialogContent, 
-  DialogTitle, 
-  TextField, 
+import {
+  Card,
+  CardMedia,
+  CardContent,
+  Typography,
+  Button,
+  Grid,
+  Box,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  TextField,
   DialogActions,
-  Alert, 
+  Alert,
   Snackbar,
   CircularProgress
 } from '@mui/material';
@@ -27,6 +27,32 @@ import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
 import PaymentForm from '../components/PaymentForm';
+
+
+const formatZAR = (amount) => {
+  console.log('Price before formatting:', amount);
+
+  let number;
+
+  if (amount === null || amount === undefined) {
+    return 'R 0.00';
+  }
+
+  if (typeof amount === 'object' && amount.hasOwnProperty('value')) {
+    number = parseFloat(amount.value);
+  } else if (typeof amount === 'string') {
+    number = parseFloat(amount.replace(/[R\s,]/g, ''));
+  } else {
+    number = parseFloat(amount);
+  }
+
+  if (isNaN(number)) {
+    console.error('Invalid price value:', amount);
+    return 'R 0.00';
+  }
+
+  return `R ${number.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
 
 function Accommodation() {
   const dispatch = useDispatch();
@@ -112,17 +138,17 @@ function Accommodation() {
       setSnackbarOpen(true);
       return;
     }
-  
+
     if (bookingData.checkInDate >= bookingData.checkOutDate) {
       setError("Check-out date must be after check-in date");
       setSnackbarOpen(true);
       return;
     }
-  
+
     setBookingOpen(false);
     setPaymentOpen(true);
   };
-  
+
   const handlePaymentComplete = async (paymentDetails) => {
     const bookingPayload = {
       accommodationId: selectedAccommodation.id,
@@ -135,7 +161,7 @@ function Accommodation() {
       createdAt: new Date().toISOString(),
       paymentDetails
     };
-  
+
     try {
       await dispatch(createBooking(bookingPayload)).unwrap();
       setPaymentOpen(false);
@@ -194,7 +220,7 @@ function Accommodation() {
       <Typography variant="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3 }}>
         Accommodations
       </Typography>
-      
+
       {/* Accommodations Grid */}
       <Grid container spacing={2} justifyContent="center">
         {accommodations.map((accommodation) => (
@@ -220,15 +246,16 @@ function Accommodation() {
                 <Typography variant="subtitle1">
                   Amenities: {getAmenitiesList(accommodation.amenities).join(', ') || 'None listed'}
                 </Typography>
+
                 <Typography variant="h6" sx={{ mt: 2 }}>
-                  Price: {accommodation.price}
+                  Price: {formatZAR(accommodation.price)}
                 </Typography>
               </CardContent>
               <Box sx={{ p: 2, mt: 'auto' }}>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  fullWidth 
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
                   onClick={() => handleClickOpen(accommodation)}
                 >
                   View Details
@@ -240,14 +267,14 @@ function Accommodation() {
       </Grid>
 
       {/* Details Dialog */}
-      <Dialog 
-        open={open} 
-        onClose={handleClose} 
-        maxWidth="md" 
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth="md"
         fullWidth
         sx={{
-          '& .MuiDialog-paper': { 
-            width: '90%', 
+          '& .MuiDialog-paper': {
+            width: '90%',
             maxHeight: '90vh',
             '& .carousel .slide img': {
               maxHeight: '50vh',
@@ -264,8 +291,8 @@ function Accommodation() {
                 <Carousel {...carouselSettings}>
                   {selectedAccommodation.imageUrls.map((url, index) => (
                     <div key={index}>
-                      <img 
-                        src={url} 
+                      <img
+                        src={url}
                         alt={`${selectedAccommodation.name} - Image ${index + 1}`}
                         style={{ width: '100%', height: '50vh', objectFit: 'contain' }}
                       />
@@ -282,13 +309,14 @@ function Accommodation() {
               <Typography variant="subtitle1" gutterBottom>
                 Amenities: {getAmenitiesList(selectedAccommodation.amenities).join(', ') || 'None listed'}
               </Typography>
+
               <Typography variant="h6" gutterBottom>
-                Price: {selectedAccommodation.price}
+                Price: {formatZAR(selectedAccommodation.price)}
               </Typography>
-              <Button 
-                variant="contained" 
-                color="primary" 
-                fullWidth 
+              <Button
+                variant="contained"
+                color="primary"
+                fullWidth
                 onClick={() => {
                   handleClose();
                   handleBookingOpen(selectedAccommodation);
@@ -303,8 +331,8 @@ function Accommodation() {
       </Dialog>
 
       {/* Booking Dialog */}
-      <Dialog 
-        open={bookingOpen} 
+      <Dialog
+        open={bookingOpen}
         onClose={handleBookingClose}
         maxWidth="sm"
         fullWidth
@@ -316,8 +344,9 @@ function Accommodation() {
               <Typography variant="h6" gutterBottom>
                 {selectedAccommodation.name}
               </Typography>
+
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Price: {selectedAccommodation.price}
+                Price: {formatZAR(selectedAccommodation.price)}
               </Typography>
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <Box sx={{ mt: 3, mb: 2 }}>
@@ -348,9 +377,9 @@ function Accommodation() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleBookingClose}>Cancel</Button>
-          <Button 
-            onClick={handleBookingSubmit} 
-            variant="contained" 
+          <Button
+            onClick={handleBookingSubmit}
+            variant="contained"
             color="primary"
             disabled={bookingStatus === 'loading'}
           >
@@ -368,16 +397,16 @@ function Accommodation() {
           dispatch(clearBookingStatus());
         }}
       >
-        <Alert 
+        <Alert
           onClose={() => {
             setSnackbarOpen(false);
             dispatch(clearBookingStatus());
-          }} 
+          }}
           severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
           sx={{ width: '100%' }}
         >
-          {bookingStatus === 'succeeded' 
-            ? 'Booking confirmed successfully!' 
+          {bookingStatus === 'succeeded'
+            ? 'Booking confirmed successfully!'
             : error || bookingError || 'Please fill in all required fields'}
         </Alert>
       </Snackbar>
@@ -386,13 +415,13 @@ function Accommodation() {
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         bookingDetails={{
-        accommodationName: selectedAccommodation?.name,
-        checkInDate: bookingData.checkInDate,
-        checkOutDate: bookingData.checkOutDate,
-        price: selectedAccommodation?.price
+          accommodationName: selectedAccommodation?.name,
+          checkInDate: bookingData.checkInDate,
+          checkOutDate: bookingData.checkOutDate,
+          price: selectedAccommodation?.price
         }}
         onPaymentComplete={handlePaymentComplete}
-      />    
+      />
 
     </Box>
   );

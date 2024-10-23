@@ -24,6 +24,31 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
 
+const formatZAR = (amount) => {
+  console.log('Payment price before formatting:', amount);
+  
+  let number;
+  
+  if (amount === null || amount === undefined) {
+    return 'R 0.00';
+  }
+  
+  if (typeof amount === 'object' && amount.hasOwnProperty('value')) {
+    number = parseFloat(amount.value);
+  } else if (typeof amount === 'string') {
+    number = parseFloat(amount.replace(/[R\s,]/g, ''));
+  } else {
+    number = parseFloat(amount);
+  }
+  
+  if (isNaN(number)) {
+    console.error('Invalid price value:', amount);
+    return 'R 0.00';
+  }
+  
+  return `R ${number.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+};
+
 // Card element styles
 const CARD_ELEMENT_OPTIONS = {
   style: {
@@ -45,16 +70,16 @@ const CARD_ELEMENT_OPTIONS = {
   hidePostalCode: true
 };
 
-const PaymentForm = ({ 
-  open = false, 
-  onClose = () => {}, 
+const PaymentForm = ({
+  open = false,
+  onClose = () => { },
   bookingDetails = {
     price: 0,
     accommodationName: '',
     checkInDate: new Date(),
     checkOutDate: new Date()
-  }, 
-  onPaymentComplete = () => {} 
+  },
+  onPaymentComplete = () => { }
 }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -68,23 +93,35 @@ const PaymentForm = ({
   const [formErrors, setFormErrors] = useState({});
 
   // Format price safely
-  const formattedPrice = typeof bookingDetails?.price === 'number' 
-    ? bookingDetails.price.toFixed(2) 
-    : '0.00';
+  const formattedPrice = (() => {
+    const price = bookingDetails?.price;
+    console.log('Booking details price:', price);
+    
+    if (!price) return '0.00';
+    
+    let number;
+    if (typeof price === 'string') {
+      number = parseFloat(price.replace(/[R\s,]/g, ''));
+    } else {
+      number = parseFloat(price);
+    }
+    
+    return isNaN(number) ? '0.00' : number.toFixed(2);
+  })();
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (!billingDetails.name.trim()) {
       errors.name = 'Name is required';
     }
-    
+
     if (!billingDetails.email.trim()) {
       errors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(billingDetails.email)) {
       errors.email = 'Please enter a valid email';
     }
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -95,7 +132,7 @@ const PaymentForm = ({
       ...prev,
       [name]: value
     }));
-    
+
     if (formErrors[name]) {
       setFormErrors(prev => ({
         ...prev,
@@ -106,7 +143,7 @@ const PaymentForm = ({
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    
+
     if (!stripe || !elements) {
       return;
     }
@@ -162,8 +199,8 @@ const PaymentForm = ({
   };
 
   return (
-    <Dialog 
-      open={open} 
+    <Dialog
+      open={open}
       onClose={onClose}
       maxWidth="sm"
       fullWidth
@@ -195,8 +232,9 @@ const PaymentForm = ({
                 <Typography variant="body2" color="text.secondary">
                   Check-out: {formatDate(bookingDetails?.checkOutDate)}
                 </Typography>
+
                 <Typography variant="h6" sx={{ mt: 2 }}>
-                  Total: ${formattedPrice}
+                  Total: {formatZAR(formattedPrice)}
                 </Typography>
               </CardContent>
             </Card>
@@ -276,8 +314,8 @@ const PaymentForm = ({
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 3 }}>
-          <Button 
-            onClick={onClose} 
+          <Button
+            onClick={onClose}
             disabled={isProcessing}
             sx={{ mr: 1 }}
           >
@@ -289,7 +327,7 @@ const PaymentForm = ({
             disabled={isProcessing || !stripe}
             startIcon={isProcessing ? <CircularProgress size={20} /> : null}
           >
-            {isProcessing ? 'Processing...' : `Pay $${formattedPrice}`}
+            {isProcessing ? 'Processing...' : `Pay ${formatZAR(formattedPrice)}`}
           </Button>
         </DialogActions>
       </form>
