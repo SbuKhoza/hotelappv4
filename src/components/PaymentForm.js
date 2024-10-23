@@ -45,7 +45,17 @@ const CARD_ELEMENT_OPTIONS = {
   hidePostalCode: true
 };
 
-const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
+const PaymentForm = ({ 
+  open = false, 
+  onClose = () => {}, 
+  bookingDetails = {
+    price: 0,
+    accommodationName: '',
+    checkInDate: new Date(),
+    checkOutDate: new Date()
+  }, 
+  onPaymentComplete = () => {} 
+}) => {
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,6 +66,11 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
     email: '',
   });
   const [formErrors, setFormErrors] = useState({});
+
+  // Format price safely
+  const formattedPrice = typeof bookingDetails?.price === 'number' 
+    ? bookingDetails.price.toFixed(2) 
+    : '0.00';
 
   const validateForm = () => {
     const errors = {};
@@ -104,7 +119,6 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
     setPaymentError(null);
 
     try {
-      // Create a payment method
       const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
         type: 'card',
         card: elements.getElement(CardElement),
@@ -117,10 +131,6 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
       if (paymentMethodError) {
         throw new Error(paymentMethodError.message);
       }
-
-      // Here you would typically send the paymentMethod.id to your server
-      // and handle the payment there. For this example, we'll simulate success
-      console.log('Payment Method:', paymentMethod);
 
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -139,6 +149,15 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
       console.error('Payment Error:', err);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Safely format dates
+  const formatDate = (dateString) => {
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return 'Invalid date';
     }
   };
 
@@ -168,21 +187,21 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
                   Booking Summary
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {bookingDetails?.accommodationName}
+                  {bookingDetails?.accommodationName || 'No accommodation specified'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Check-in: {new Date(bookingDetails?.checkInDate).toLocaleDateString()}
+                  Check-in: {formatDate(bookingDetails?.checkInDate)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Check-out: {new Date(bookingDetails?.checkOutDate).toLocaleDateString()}
+                  Check-out: {formatDate(bookingDetails?.checkOutDate)}
                 </Typography>
                 <Typography variant="h6" sx={{ mt: 2 }}>
-                  Total: ${bookingDetails?.price.toFixed(2)}
+                  Total: ${formattedPrice}
                 </Typography>
               </CardContent>
             </Card>
 
-            {/* Billing Details */}
+            {/* Rest of the form remains the same */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12}>
                 <TextField
@@ -270,7 +289,7 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
             disabled={isProcessing || !stripe}
             startIcon={isProcessing ? <CircularProgress size={20} /> : null}
           >
-            {isProcessing ? 'Processing...' : `Pay $${bookingDetails?.price.toFixed(2)}`}
+            {isProcessing ? 'Processing...' : `Pay $${formattedPrice}`}
           </Button>
         </DialogActions>
       </form>
