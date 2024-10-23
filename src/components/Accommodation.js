@@ -3,8 +3,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { db, storage } from '../service/Firebase';
 import { collection, getDocs } from "firebase/firestore";
 import { ref, getDownloadURL, listAll } from "firebase/storage";
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { 
   Card, 
   CardMedia, 
@@ -18,7 +16,6 @@ import {
   DialogTitle, 
   TextField, 
   DialogActions,
-
   Alert, 
   Snackbar,
   CircularProgress
@@ -29,54 +26,12 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
-import { createPaymentIntent } from '../redux/slices/PaymentSlice';
-
-const stripePromise = loadStripe('your_publishable_key');
-
-const PaymentForm = ({ clientSecret, onPaymentSuccess, onPaymentError, amount }) => {
-  const stripe = useStripe();
-  const elements = useElements();
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (!stripe || !elements) return;
-
-    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: {
-        card: elements.getElement(CardElement),
-      },
-    });
-
-    if (error) {
-      onPaymentError(error.message);
-    } else {
-      onPaymentSuccess(paymentIntent);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <CardElement />
-      <Button 
-        type="submit" 
-        variant="contained" 
-        color="primary" 
-        fullWidth 
-        sx={{ mt: 2 }}
-        disabled={!stripe}
-      >
-        Pay ${amount}
-      </Button>
-    </form>
-  );
-};
-
+import PaymentForm from '../components/PaymentForm';
 
 function Accommodation() {
   const dispatch = useDispatch();
   const bookingStatus = useSelector((state) => state.booking.status);
   const bookingError = useSelector((state) => state.booking.error);
-  
 
   // States
   const [accommodations, setAccommodations] = useState([]);
@@ -90,9 +45,7 @@ function Accommodation() {
     checkOutDate: null,
   });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [clientSecret, setClientSecret] = useState(null);
-  const [bookingPayload, setBookingPayload] = useState(null);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   // Fetch accommodations on component mount
   useEffect(() => {
@@ -153,8 +106,9 @@ function Accommodation() {
   };
 
   // Handle booking submission
-  const handleBookingSubmit = async () => {
+  const handleBookingSubmit = () => {
     if (!bookingData.checkInDate || !bookingData.checkOutDate) {
+      setError("Please fill in all required fields");
       setSnackbarOpen(true);
       return;
     }
@@ -165,6 +119,11 @@ function Accommodation() {
       return;
     }
   
+    setBookingOpen(false);
+    setPaymentOpen(true);
+  };
+  
+  const handlePaymentComplete = async (paymentDetails) => {
     const bookingPayload = {
       accommodationId: selectedAccommodation.id,
       accommodationName: selectedAccommodation.name,
@@ -172,34 +131,19 @@ function Accommodation() {
       checkOutDate: bookingData.checkOutDate.toISOString(),
       price: selectedAccommodation.price,
       userId: 'guest',
-      status: 'pending',
-      createdAt: new Date().toISOString()
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+      paymentDetails
     };
   
     try {
-      // Create payment intent first
-      const paymentIntent = await dispatch(createPaymentIntent(bookingPayload)).unwrap();
-      setPaymentDialogOpen(true);
-      setClientSecret(paymentIntent.clientSecret);
-    } catch (error) {
-      console.error('Payment intent creation failed:', error);
-      setError(error.message);
-      setSnackbarOpen(true);
-    }
-  };
-
-  const handlePaymentSuccess = async (paymentIntent) => {
-    try {
-      await dispatch(createBooking({
-        ...bookingPayload,
-        paymentId: paymentIntent.id
-      })).unwrap();
-      setPaymentDialogOpen(false);
-      handleBookingClose();
+      await dispatch(createBooking(bookingPayload)).unwrap();
+      setPaymentOpen(false);
+      setError(null);
       setSnackbarOpen(true);
     } catch (error) {
       console.error('Booking failed:', error);
-      setError(error.message);
+      setError(error.message || 'Failed to create booking');
       setSnackbarOpen(true);
     }
   };
@@ -438,29 +382,17 @@ function Accommodation() {
         </Alert>
       </Snackbar>
 
-      <Dialog 
-        open={paymentDialogOpen} 
-        onClose={() => setPaymentDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        >
-        <DialogTitle>Complete Payment</DialogTitle>
-    <DialogContent>
-      {clientSecret && (
-      <Elements stripe={stripePromise}>
-        <PaymentForm 
-          clientSecret={clientSecret}
-          onPaymentSuccess={handlePaymentSuccess}
-          onPaymentError={(error) => {
-            setError(error);
-            setSnackbarOpen(true);
-          }}
-          amount={selectedAccommodation?.price}
-        />
-      </Elements>
-      )}
-    </DialogContent>
-    </Dialog>
+      <PaymentForm
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        bookingDetails={{
+        accommodationName: selectedAccommodation?.name,
+        checkInDate: bookingData.checkInDate,
+        checkOutDate: bookingData.checkOutDate,
+        price: selectedAccommodation?.price
+        }}
+        onPaymentComplete={handlePaymentComplete}
+      />    
 
     </Box>
   );
