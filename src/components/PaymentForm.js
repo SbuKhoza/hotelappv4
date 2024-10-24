@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import {
   Box,
   Button,
@@ -20,6 +21,9 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
+import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../service/Firebase';
+import { setPaymentSuccess } from '../redux/slices/PaymentSlice';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
@@ -49,7 +53,6 @@ const formatZAR = (amount) => {
   return `R ${number.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
-// Card element styles
 const CARD_ELEMENT_OPTIONS = {
   style: {
     base: {
@@ -77,10 +80,13 @@ const PaymentForm = ({
     price: 0,
     accommodationName: '',
     checkInDate: new Date(),
-    checkOutDate: new Date()
+    checkOutDate: new Date(),
+    accommodationId: '',
+    userId: '',
   },
   onPaymentComplete = () => { }
 }) => {
+  const dispatch = useDispatch();
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -92,7 +98,6 @@ const PaymentForm = ({
   });
   const [formErrors, setFormErrors] = useState({});
 
-  // Format price safely
   const formattedPrice = (() => {
     const price = bookingDetails?.price;
     console.log('Booking details price:', price);
@@ -141,6 +146,42 @@ const PaymentForm = ({
     }
   };
 
+  const updateFirebaseAfterPayment = async (paymentData) => {
+    try {
+      // Create a new booking document
+      const bookingId = `booking_${Date.now()}_${bookingDetails.userId}`;
+      const bookingRef = doc(db, 'bookings', bookingId);
+      
+      await setDoc(bookingRef, {
+        userId: bookingDetails.userId,
+        accommodationId: bookingDetails.accommodationId,
+        accommodationName: bookingDetails.accommodationName,
+        checkInDate: new Date(bookingDetails.checkInDate),
+        checkOutDate: new Date(bookingDetails.checkOutDate),
+        price: parseFloat(bookingDetails.price),
+        status: 'pending',
+        paymentId: paymentData.transactionId,
+        customerName: billingDetails.name,
+        customerEmail: billingDetails.email,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Update accommodation status
+      const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
+      await updateDoc(accommodationRef, {
+        status: 'pending',
+        lastBookedAt: serverTimestamp(),
+        currentBookingId: bookingId
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Firebase update error:', error);
+      throw new Error('Failed to update booking status');
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -172,24 +213,32 @@ const PaymentForm = ({
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      setPaymentSuccess(true);
-      onPaymentComplete({
+      const paymentData = {
         status: 'success',
         transactionId: paymentMethod.id,
         amount: bookingDetails.price,
         paymentMethod: paymentMethod,
-      });
+      };
+
+      // Update Firebase after successful payment
+      await updateFirebaseAfterPayment(paymentData);
+
+      // Update Redux state
+      dispatch(setPaymentSuccess(true));
+      
+      setPaymentSuccess(true);
+      onPaymentComplete(paymentData);
 
       setTimeout(() => onClose(), 2000);
     } catch (err) {
       setPaymentError(err.message);
       console.error('Payment Error:', err);
+      dispatch(setPaymentSuccess(false));
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Safely format dates
   const formatDate = (dateString) => {
     try {
       return new Date(dateString).toLocaleDateString();
@@ -217,7 +266,6 @@ const PaymentForm = ({
       <form onSubmit={handleSubmit}>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            {/* Booking Summary */}
             <Card variant="outlined" sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="subtitle1" gutterBottom>
@@ -239,7 +287,6 @@ const PaymentForm = ({
               </CardContent>
             </Card>
 
-            {/* Rest of the form remains the same */}
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12}>
                 <TextField
@@ -280,7 +327,6 @@ const PaymentForm = ({
               </Grid>
             </Grid>
 
-            {/* Card Element */}
             <Box
               sx={{
                 border: '1px solid',
@@ -299,7 +345,6 @@ const PaymentForm = ({
               <CardElement options={CARD_ELEMENT_OPTIONS} />
             </Box>
 
-            {/* Messages */}
             {paymentSuccess && (
               <Alert severity="success" sx={{ mt: 2 }}>
                 Payment processed successfully!

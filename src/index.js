@@ -10,7 +10,7 @@ import { loadStripe } from '@stripe/stripe-js';
 
 // Initialize Stripe with your publishable key
 // Replace 'your_publishable_key' with your actual Stripe publishable key
-const stripePromise = loadStripe('your_publishable_key');
+const stripePromise = loadStripe('pk_test_RIXll9Ms047XX7GIsxcYWs5Y00vFwwnGgB');
 
 // Stripe configuration options
 const stripeOptions = {
