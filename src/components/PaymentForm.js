@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
   Button,
@@ -87,11 +87,12 @@ const PaymentForm = ({
   onPaymentComplete = () => { }
 }) => {
   const dispatch = useDispatch();
+  const currentUser = useSelector(state => state.user.user);
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentSuccess, setLocalPaymentSuccess] = useState(false);
   const [billingDetails, setBillingDetails] = useState({
     name: '',
     email: '',
@@ -148,30 +149,51 @@ const PaymentForm = ({
 
   const updateFirebaseAfterPayment = async (paymentData) => {
     try {
-      // Create a new booking document
-      const bookingId = `booking_${Date.now()}_${bookingDetails.userId}`;
+      if (!currentUser?.uid) {
+        throw new Error('User not authenticated');
+      }
+
+      const timestamp = serverTimestamp();
+      const bookingId = `booking_${Date.now()}_${currentUser.uid}`;
+
+      // Create booking document
       const bookingRef = doc(db, 'bookings', bookingId);
-      
-      await setDoc(bookingRef, {
-        userId: bookingDetails.userId,
+      const bookingData = {
+        userId: currentUser.uid,
         accommodationId: bookingDetails.accommodationId,
         accommodationName: bookingDetails.accommodationName,
         checkInDate: new Date(bookingDetails.checkInDate),
         checkOutDate: new Date(bookingDetails.checkOutDate),
         price: parseFloat(bookingDetails.price),
-        status: 'pending',
+        status: 'confirmed',
         paymentId: paymentData.transactionId,
         customerName: billingDetails.name,
         customerEmail: billingDetails.email,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+      await setDoc(bookingRef, bookingData);
+
+      // Create order document
+      const orderRef = doc(collection(db, 'orders'), bookingId);
+      const orderData = {
+        ...bookingData,
+        orderStatus: 'completed',
+        paymentMethod: 'card',
+        paymentDetails: {
+          last4: paymentData.paymentMethod.card.last4,
+          brand: paymentData.paymentMethod.card.brand,
+          expiryMonth: paymentData.paymentMethod.card.exp_month,
+          expiryYear: paymentData.paymentMethod.card.exp_year
+        }
+      };
+      await setDoc(orderRef, orderData);
 
       // Update accommodation status
       const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
       await updateDoc(accommodationRef, {
-        status: 'pending',
-        lastBookedAt: serverTimestamp(),
+        status: 'booked',
+        lastBookedAt: timestamp,
         currentBookingId: bookingId
       });
 
@@ -180,14 +202,15 @@ const PaymentForm = ({
       console.error('Firebase update error:', error);
       throw new Error('Failed to update booking status');
     }
-  };
+};
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+const handleSubmit = async (event) => {
+  event.preventDefault();
 
-    if (!stripe || !elements) {
-      return;
-    }
+  if (!stripe || !elements || !currentUser?.uid) {
+    setPaymentError('Please login to continue with payment');
+    return;
+  }
 
     if (!validateForm()) {
       return;
@@ -223,21 +246,21 @@ const PaymentForm = ({
       // Update Firebase after successful payment
       await updateFirebaseAfterPayment(paymentData);
 
-      // Update Redux state
+      // Update both Redux and local state
       dispatch(setPaymentSuccess(true));
-      
-      setPaymentSuccess(true);
+      setLocalPaymentSuccess(true);
       onPaymentComplete(paymentData);
 
       setTimeout(() => onClose(), 2000);
     } catch (err) {
       setPaymentError(err.message);
       console.error('Payment Error:', err);
+      // Dispatch failure state to Redux
       dispatch(setPaymentSuccess(false));
     } finally {
       setIsProcessing(false);
     }
-  };
+};
 
   const formatDate = (dateString) => {
     try {
