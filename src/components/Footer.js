@@ -31,9 +31,9 @@ function Footer() {
   ];
 
   const contactInfo = [
-    { icon: <Phone />, text: '+1 (555) 123-4567' },
+    { icon: <Phone />, text: '+27 78 029 6288' },
     { icon: <Email />, text: 'contact@steadyhotel.com' },
-    { icon: <LocationOn />, text: '123 Hotel Street, City, Country' },
+    { icon: <LocationOn />, text: 'Block 8 Thulani 36 street Snakepark Soweto, 1863' },
   ];
 
   const footerLinks = [
@@ -111,7 +111,7 @@ function Footer() {
             <Box
               component="iframe"
               title="Steady Hotel Location"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3151.8354345095277!2d144.96305761531!3d-37.816279442021254!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6ad642af0f11fd81%3A0xf577c8bcbd4f94a!2sSteady%20Hotel!5e0!3m2!1sen!2sus!4v1670000000000!5m2!1sen!2sus"
+              src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d14316.114454160583!2d27.8262675!3d-26.2282598!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1e95a370271c9caf%3A0x681c783f9fd7672!2sMalloya%20Group!5e0!3m2!1sen!2sza!4v1730361999396!5m2!1sen!2sza"
               sx={{
                 width: '100%',
                 height: 200,
@@ -120,6 +120,7 @@ function Footer() {
               }}
               loading="lazy"
               allowFullScreen
+              referrerPolicy="no-referrer-when-downgrade"
             />
           </Grid>
         </Grid>
