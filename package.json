@@ -28,7 +28,10 @@
     "react-scripts": "^5.0.1",
     "source-map": "^0.6.1",
     "util": "^0.12.5",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "webpack-dev-server": "^5.2.0",
+    "workbox-build": "^7.3.0",
+    "workbox-webpack-plugin": "^7.3.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -53,5 +56,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0"
   }
 }
