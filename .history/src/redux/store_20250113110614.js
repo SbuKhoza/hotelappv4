@@ -3,7 +3,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import userReducer from './slices/userSlice';
 import bookingReducer from './slices/bookingSlice';
 import paymentReducer from './slices/PaymentSlice';
-import authsliceReducer from './slices/userSlice'
+import authsliceReducer from
 
 const store = configureStore({
   reducer: {
