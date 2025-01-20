@@ -403,50 +403,47 @@ function Accommodation() {
             {bookingStatus === 'loading' ? <CircularProgress size={24} /> : 'Confirm Booking'}
           </Button>
         </DialogActions>
-      
-        </Dialog>
+      </Dialog
 
-{/* Success/Error Snackbar */}
-<Snackbar
-  open={snackbarOpen}
-  autoHideDuration={6000}
-  onClose={() => {
-    setSnackbarOpen(false);
-    dispatch(clearBookingStatus());
-  }}
->
-  <Alert
-    onClose={() => {
-      setSnackbarOpen(false);
-      dispatch(clearBookingStatus());
-    }}
-    severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
-    sx={{ width: '100%' }}
-  >
-    {bookingStatus === 'succeeded'
-      ? 'Booking confirmed successfully!'
-      : error || bookingError || 'Please fill in all required fields'}
-  </Alert>
-</Snackbar>
+       {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSnackbarOpen(false);
+          dispatch(clearBookingStatus());
+        }}
+      >
+        <Alert
+          onClose={() => {
+            setSnackbarOpen(false);
+            dispatch(clearBookingStatus());
+          }}
+          severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
+          sx={{ width: '100%' }}
+        >
+          {bookingStatus === 'succeeded'
+            ? 'Booking confirmed successfully!'
+            : error || bookingError || 'Please fill in all required fields'}
+        </Alert>
+      </Snackbar>
 
-{/* Payment Form Dialog */}
-<PaymentForm
-  open={paymentOpen}
-  onClose={() => setPaymentOpen(false)}
-  bookingDetails={{
-    accommodationName: selectedAccommodation?.name,
-    checkInDate: bookingData.checkInDate,
-    checkOutDate: bookingData.checkOutDate,
-    numberOfGuests: bookingData.numberOfGuests,
-    price: selectedAccommodation?.price
-  }}
-  onPaymentComplete={handlePaymentComplete}
-/>
+      {/* Payment Form Dialog */}
+      <PaymentForm
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        bookingDetails={{
+          accommodationName: selectedAccommodation?.name,
+          checkInDate: bookingData.checkInDate,
+          checkOutDate: bookingData.checkOutDate,
+          numberOfGuests: bookingData.numberOfGuests,
+          price: selectedAccommodation?.price
+        }}
+        onPaymentComplete={handlePaymentComplete}
+      />
 
-</Box>
-);
+    </Box>
+  );
 }
 
 export default Accommodation;
-
-      

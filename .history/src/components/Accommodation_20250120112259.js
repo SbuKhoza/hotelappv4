@@ -28,6 +28,7 @@ import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
 import PaymentForm from '../components/PaymentForm';
 
+
 const formatZAR = (amount) => {
   console.log('Price before formatting:', amount);
 
@@ -53,13 +54,6 @@ const formatZAR = (amount) => {
   return `R ${number.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
-const MAX_GUESTS = {
-  'Conference Hall': 250,
-  'Spa': 10,
-  'Honeymoon Suite': 2,
-  'Standard Room': 10
-};
-
 function Accommodation() {
   const dispatch = useDispatch();
   const bookingStatus = useSelector((state) => state.booking.status);
@@ -75,7 +69,6 @@ function Accommodation() {
   const [bookingData, setBookingData] = useState({
     checkInDate: null,
     checkOutDate: null,
-    numberOfGuests: 1
   });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -113,6 +106,7 @@ function Accommodation() {
     fetchAccommodations();
   }, []);
 
+  // Handle viewing accommodation details
   const handleClickOpen = (accommodation) => {
     setSelectedAccommodation(accommodation);
     setOpen(true);
@@ -123,6 +117,7 @@ function Accommodation() {
     setSelectedAccommodation(null);
   };
 
+  // Handle booking dialog
   const handleBookingOpen = (accommodation) => {
     setSelectedAccommodation(accommodation);
     setBookingOpen(true);
@@ -133,12 +128,12 @@ function Accommodation() {
     setBookingData({
       checkInDate: null,
       checkOutDate: null,
-      numberOfGuests: 1
     });
   };
 
+  // Handle booking submission
   const handleBookingSubmit = () => {
-    if (!bookingData.checkInDate || !bookingData.checkOutDate || !bookingData.numberOfGuests) {
+    if (!bookingData.checkInDate || !bookingData.checkOutDate) {
       setError("Please fill in all required fields");
       setSnackbarOpen(true);
       return;
@@ -146,13 +141,6 @@ function Accommodation() {
 
     if (bookingData.checkInDate >= bookingData.checkOutDate) {
       setError("Check-out date must be after check-in date");
-      setSnackbarOpen(true);
-      return;
-    }
-
-    const maxGuests = MAX_GUESTS[selectedAccommodation.name] || 1;
-    if (bookingData.numberOfGuests > maxGuests) {
-      setError(`Maximum ${maxGuests} guests allowed for ${selectedAccommodation.name}`);
       setSnackbarOpen(true);
       return;
     }
@@ -167,7 +155,6 @@ function Accommodation() {
       accommodationName: selectedAccommodation.name,
       checkInDate: bookingData.checkInDate.toISOString(),
       checkOutDate: bookingData.checkOutDate.toISOString(),
-      numberOfGuests: bookingData.numberOfGuests,
       price: selectedAccommodation.price,
       userId: 'guest',
       status: 'confirmed',
@@ -187,6 +174,7 @@ function Accommodation() {
     }
   };
 
+  // Helper function to get amenities list
   const getAmenitiesList = (amenities) => {
     if (typeof amenities === 'object' && amenities !== null) {
       return Object.keys(amenities)
@@ -196,6 +184,7 @@ function Accommodation() {
     return [];
   };
 
+  // Carousel settings
   const carouselSettings = {
     showThumbs: false,
     showStatus: false,
@@ -208,6 +197,7 @@ function Accommodation() {
     showArrows: true,
   };
 
+  // Loading state
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -216,6 +206,7 @@ function Accommodation() {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -226,10 +217,11 @@ function Accommodation() {
 
   return (
     <Box sx={{ flexGrow: 1, padding: 2 }}>
-      <Typography variant="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3, color: 'black' }}>
+      <Typography variant="h1" sx={{ textAlign: 'center', fontSize: '2rem', marginBottom: 3 }}>
         Accommodations
       </Typography>
 
+      {/* Accommodations Grid */}
       <Grid container spacing={2} justifyContent="center">
         {accommodations.map((accommodation) => (
           <Grid item xs={12} sm={6} md={4} lg={3} key={accommodation.id}>
@@ -242,26 +234,27 @@ function Accommodation() {
                 sx={{ objectFit: 'cover' }}
               />
               <CardContent sx={{ flexGrow: 1 }}>
-                <Typography gutterBottom variant="h5" component="div" sx={{ color: 'black' }}>
+                <Typography gutterBottom variant="h5" component="div">
                   {accommodation.name}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {accommodation.description}
                 </Typography>
-                <Typography variant="subtitle1" sx={{ color: 'black' }}>
-                  Max Guests: {MAX_GUESTS[accommodation.name] || 'Not specified'}
+                <Typography variant="subtitle1">
+                  Guests: {accommodation.guests || 'Not specified'}
                 </Typography>
-                <Typography variant="subtitle1" sx={{ color: 'black' }}>
+                <Typography variant="subtitle1">
                   Amenities: {getAmenitiesList(accommodation.amenities).join(', ') || 'None listed'}
                 </Typography>
-                <Typography variant="h6" sx={{ mt: 2, color: 'black' }}>
+
+                <Typography variant="h6" sx={{ mt: 2 }}>
                   Price: {formatZAR(accommodation.price)}
                 </Typography>
               </CardContent>
               <Box sx={{ p: 2, mt: 'auto' }}>
                 <Button
                   variant="contained"
-                  sx={{ bgcolor: 'black', '&:hover': { bgcolor: '#333' } }}
+                  color="primary"
                   fullWidth
                   onClick={() => handleClickOpen(accommodation)}
                 >
@@ -273,6 +266,7 @@ function Accommodation() {
         ))}
       </Grid>
 
+      {/* Details Dialog */}
       <Dialog
         open={open}
         onClose={handleClose}
@@ -291,7 +285,7 @@ function Accommodation() {
       >
         {selectedAccommodation && (
           <>
-            <DialogTitle sx={{ color: 'black' }}>{selectedAccommodation.name}</DialogTitle>
+            <DialogTitle>{selectedAccommodation.name}</DialogTitle>
             <DialogContent>
               <Box sx={{ mb: 2 }}>
                 <Carousel {...carouselSettings}>
@@ -306,26 +300,28 @@ function Accommodation() {
                   ))}
                 </Carousel>
               </Box>
-              <Typography variant="body1" paragraph sx={{ color: 'black' }}>
+              <Typography variant="body1" paragraph>
                 {selectedAccommodation.description}
               </Typography>
-              <Typography variant="subtitle1" gutterBottom sx={{ color: 'black' }}>
-                Max Guests: {MAX_GUESTS[selectedAccommodation.name] || 'Not specified'}
+              <Typography variant="subtitle1" gutterBottom>
+                Guests: {selectedAccommodation.guests || 'Not specified'}
               </Typography>
-              <Typography variant="subtitle1" gutterBottom sx={{ color: 'black' }}>
+              <Typography variant="subtitle1" gutterBottom>
                 Amenities: {getAmenitiesList(selectedAccommodation.amenities).join(', ') || 'None listed'}
               </Typography>
-              <Typography variant="h6" gutterBottom sx={{ color: 'black' }}>
+
+              <Typography variant="h6" gutterBottom>
                 Price: {formatZAR(selectedAccommodation.price)}
               </Typography>
               <Button
                 variant="contained"
-                sx={{ bgcolor: 'black', '&:hover': { bgcolor: '#333' }, mt: 2 }}
+                color="primary"
                 fullWidth
                 onClick={() => {
                   handleClose();
                   handleBookingOpen(selectedAccommodation);
                 }}
+                sx={{ mt: 2 }}
               >
                 Book Now
               </Button>
@@ -334,37 +330,24 @@ function Accommodation() {
         )}
       </Dialog>
 
+      {/* Booking Dialog */}
       <Dialog
         open={bookingOpen}
         onClose={handleBookingClose}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ color: 'black' }}>Book Accommodation</DialogTitle>
+        <DialogTitle>Book Accommodation</DialogTitle>
         <DialogContent>
           {selectedAccommodation && (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" gutterBottom sx={{ color: 'black' }}>
+              <Typography variant="h6" gutterBottom>
                 {selectedAccommodation.name}
               </Typography>
+
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Price: {formatZAR(selectedAccommodation.price)}
               </Typography>
-              
-              <TextField
-                fullWidth
-                type="number"
-                label="Number of Guests"
-                value={bookingData.numberOfGuests}
-                onChange={(e) => {
-                  const value = Math.max(1, parseInt(e.target.value) || 1);
-                  setBookingData(prev => ({ ...prev, numberOfGuests: value }));
-                }}
-                InputProps={{ inputProps: { min: 1, max: MAX_GUESTS[selectedAccommodation.name] } }}
-                helperText={`Maximum ${MAX_GUESTS[selectedAccommodation.name]} guests allowed`}
-                sx={{ mb: 2 }}
-              />
-
               <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <Box sx={{ mt: 3, mb: 2 }}>
                   <DateTimePicker
@@ -393,60 +376,55 @@ function Accommodation() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleBookingClose} sx={{ color: 'black' }}>Cancel</Button>
+          <Button onClick={handleBookingClose}>Cancel</Button>
           <Button
             onClick={handleBookingSubmit}
             variant="contained"
-            sx={{ bgcolor: 'black', '&:hover': { bgcolor: '#333' } }}
+            color="primary"
             disabled={bookingStatus === 'loading'}
           >
             {bookingStatus === 'loading' ? <CircularProgress size={24} /> : 'Confirm Booking'}
           </Button>
         </DialogActions>
-      
-        </Dialog>
+      </Dialog>
 
-{/* Success/Error Snackbar */}
-<Snackbar
-  open={snackbarOpen}
-  autoHideDuration={6000}
-  onClose={() => {
-    setSnackbarOpen(false);
-    dispatch(clearBookingStatus());
-  }}
->
-  <Alert
-    onClose={() => {
-      setSnackbarOpen(false);
-      dispatch(clearBookingStatus());
-    }}
-    severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
-    sx={{ width: '100%' }}
-  >
-    {bookingStatus === 'succeeded'
-      ? 'Booking confirmed successfully!'
-      : error || bookingError || 'Please fill in all required fields'}
-  </Alert>
-</Snackbar>
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => {
+          setSnackbarOpen(false);
+          dispatch(clearBookingStatus());
+        }}
+      >
+        <Alert
+          onClose={() => {
+            setSnackbarOpen(false);
+            dispatch(clearBookingStatus());
+          }}
+          severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
+          sx={{ width: '100%' }}
+        >
+          {bookingStatus === 'succeeded'
+            ? 'Booking confirmed successfully!'
+            : error || bookingError || 'Please fill in all required fields'}
+        </Alert>
+      </Snackbar>
 
-{/* Payment Form Dialog */}
-<PaymentForm
-  open={paymentOpen}
-  onClose={() => setPaymentOpen(false)}
-  bookingDetails={{
-    accommodationName: selectedAccommodation?.name,
-    checkInDate: bookingData.checkInDate,
-    checkOutDate: bookingData.checkOutDate,
-    numberOfGuests: bookingData.numberOfGuests,
-    price: selectedAccommodation?.price
-  }}
-  onPaymentComplete={handlePaymentComplete}
-/>
+      <PaymentForm
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        bookingDetails={{
+          accommodationName: selectedAccommodation?.name,
+          checkInDate: bookingData.checkInDate,
+          checkOutDate: bookingData.checkOutDate,
+          price: selectedAccommodation?.price
+        }}
+        onPaymentComplete={handlePaymentComplete}
+      />
 
-</Box>
-);
+    </Box>
+  );
 }
 
 export default Accommodation;
-
-      

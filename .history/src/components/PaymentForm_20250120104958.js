@@ -30,11 +30,13 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   }, [user]);
 
   useEffect(() => {
+    // Clear any existing errors when the dialog opens/closes
     if (!open) {
       setError('');
     }
   }, [open]);
 
+  // Validate and parse price
   const validateAndParsePrice = (price) => {
     try {
       if (typeof price === 'string') {
@@ -48,6 +50,13 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   };
 
   const amount = bookingDetails?.price ? Math.round(validateAndParsePrice(bookingDetails.price) * 100) : 0;
+
+  console.log('Payment config:', {
+    amount,
+    email: email,
+    userDetails: user,
+    bookingDetails: bookingDetails
+  });
 
   const config = {
     reference: (new Date()).getTime().toString(),
@@ -87,7 +96,6 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
         price: bookingDetails.price,
         paymentId: reference.reference,
         paymentStatus: 'completed',
-        status: 'pending', // Set initial status as pending
         email: user.email,
         userId: user.uid,
         userName: user.name,
@@ -213,7 +221,7 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
           color="primary"
           disabled={!user || !amount}
         >
-          Pay Now R {amount / 100}
+          Pay Now  {amount / 100}
         </Button>
       </DialogActions>
     </Dialog>
