@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   Box,
@@ -27,9 +27,11 @@ import {
   setDoc, 
   updateDoc, 
   serverTimestamp,
+
   runTransaction,
   query,
   where 
+
 } from 'firebase/firestore';
 import { db } from '../service/Firebase';
 import { setPaymentSuccess } from '../redux/slices/PaymentSlice';
@@ -37,30 +39,38 @@ import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
 
+// Improved price validation and formatting
+const validateAndFormatPrice = (price) => {
+  if (price === null || price === undefined) {
+    return 0;
+  }
+
+  try {
+    if (typeof price === 'number') {
+      return price;
+    }
+
+    if (typeof price === 'string') {
+      // Remove all non-numeric characters except decimal point
+      const cleanPrice = price.replace(/[^0-9.]/g, '');
+      const parsedPrice = parseFloat(cleanPrice);
+      return isNaN(parsedPrice) ? 0 : parsedPrice;
+    }
+
+    if (typeof price === 'object' && price !== null && 'value' in price) {
+      return validateAndFormatPrice(price.value);
+    }
+
+    return 0;
+  } catch (error) {
+    console.error('Price validation error:', error);
+    return 0;
+  }
+};
 
 const formatZAR = (amount) => {
-  console.log('Payment price before formatting:', amount);
-  
-  let number;
-  
-  if (amount === null || amount === undefined) {
-    return 'R 0.00';
-  }
-  
-  if (typeof amount === 'object' && amount.hasOwnProperty('value')) {
-    number = parseFloat(amount.value);
-  } else if (typeof amount === 'string') {
-    number = parseFloat(amount.replace(/[R\s,]/g, ''));
-  } else {
-    number = parseFloat(amount);
-  }
-  
-  if (isNaN(number)) {
-    console.error('Invalid price value:', amount);
-    return 'R 0.00';
-  }
-  
-  return `R ${number.toFixed(2)}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const validAmount = validateAndFormatPrice(amount);
+  return `R ${validAmount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 };
 
 const CARD_ELEMENT_OPTIONS = {
@@ -83,23 +93,26 @@ const CARD_ELEMENT_OPTIONS = {
   hidePostalCode: true
 };
 
+const defaultBookingDetails = {
+  price: 0,
+  accommodationName: '',
+  checkInDate: new Date(),
+  checkOutDate: new Date(),
+  accommodationId: '',
+  userId: '',
+};
+
 const PaymentForm = ({
   open = false,
   onClose = () => { },
-  bookingDetails = {
-    price: 0,
-    accommodationName: '',
-    checkInDate: new Date(),
-    checkOutDate: new Date(),
-    accommodationId: '',
-    userId: '',
-  },
+  bookingDetails = defaultBookingDetails,
   onPaymentComplete = () => { }
 }) => {
   const dispatch = useDispatch();
   const currentUser = useSelector(state => state.user.user);
   const stripe = useStripe();
   const elements = useElements();
+  
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
   const [paymentSuccess, setLocalPaymentSuccess] = useState(false);
@@ -108,22 +121,17 @@ const PaymentForm = ({
     email: '',
   });
   const [formErrors, setFormErrors] = useState({});
+  const [validatedPrice, setValidatedPrice] = useState(0);
 
-  const formattedPrice = (() => {
-    const price = bookingDetails?.price;
-    console.log('Booking details price:', price);
+  // Validate booking details on component mount and when they change
+  useEffect(() => {
+    const price = validateAndFormatPrice(bookingDetails?.price);
+    setValidatedPrice(price);
     
-    if (!price) return '0.00';
-    
-    let number;
-    if (typeof price === 'string') {
-      number = parseFloat(price.replace(/[R\s,]/g, ''));
-    } else {
-      number = parseFloat(price);
+    if (price === 0) {
+      console.warn('Invalid or zero price detected:', bookingDetails?.price);
     }
-    
-    return isNaN(number) ? '0.00' : number.toFixed(2);
-  })();
+  }, [bookingDetails]);
 
   const validateForm = () => {
     const errors = {};
@@ -136,6 +144,18 @@ const PaymentForm = ({
       errors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(billingDetails.email)) {
       errors.email = 'Please enter a valid email';
+    }
+
+    if (validatedPrice <= 0) {
+      errors.price = 'Invalid price amount';
+    }
+
+    if (!currentUser?.uid) {
+      errors.auth = 'User must be authenticated';
+    }
+
+    if (!stripe || !elements) {
+      errors.stripe = 'Payment system is not ready';
     }
 
     setFormErrors(errors);
@@ -157,6 +177,7 @@ const PaymentForm = ({
     }
   };
 
+<<<<<<< HEAD
 
 const updateFirebaseAfterPayment = async (paymentData) => {
   if (!currentUser?.uid) {
@@ -327,93 +348,128 @@ const updateFirebaseAfterPayment = async (paymentData) => {
           brand: paymentData.paymentMethod.card.brand,
           expiryMonth: paymentData.paymentMethod.card.exp_month,
           expiryYear: paymentData.paymentMethod.card.exp_year
+
         }
+
+        const accommodationData = accommodationDoc.data();
+        if (!accommodationData) {
+          throw new Error('Invalid accommodation data');
+        }
+
+        if (accommodationData.status === 'booked') {
+          throw new Error('Accommodation is no longer available');
+        }
+
+        // Price validation
+        const accommodationPrice = validateAndFormatPrice(accommodationData.price);
+        const bookingPrice = validateAndFormatPrice(bookingDetails.price);
+
+        if (accommodationPrice !== bookingPrice) {
+          throw new Error('Price has changed. Please refresh and try again.');
+        }
+
+        // Prepare booking document
+        const bookingData = {
+          userId: currentUser.uid,
+          accommodationId: bookingDetails.accommodationId || '',
+          accommodationName: bookingDetails.accommodationName || '',
+          checkInDate: bookingDetails.checkInDate ? new Date(bookingDetails.checkInDate) : new Date(),
+          checkOutDate: bookingDetails.checkOutDate ? new Date(bookingDetails.checkOutDate) : new Date(),
+          price: bookingPrice,
+          status: 'confirmed',
+          paymentId: paymentData?.transactionId || '',
+          customerName: billingDetails.name || '',
+          customerEmail: billingDetails.email || '',
+          createdAt: timestamp,
+          updatedAt: timestamp
+        };
+
+        // Prepare order document
+        const orderData = {
+          ...bookingData,
+          orderStatus: 'completed',
+          paymentMethod: 'card',
+          paymentDetails: {
+            last4: paymentData?.paymentMethod?.card?.last4 || '',
+            brand: paymentData?.paymentMethod?.card?.brand || '',
+            expiryMonth: paymentData?.paymentMethod?.card?.exp_month || '',
+            expiryYear: paymentData?.paymentMethod?.card?.exp_year || ''
+          }
+        };
+
+        // Create document references
+        const bookingRef = doc(db, 'bookings', bookingId);
+        const orderRef = doc(collection(db, 'orders'), bookingId);
+
+        // Execute transaction
+        transaction.set(bookingRef, bookingData);
+        transaction.set(orderRef, orderData);
+        transaction.update(accommodationRef, {
+          status: 'booked',
+          lastBookedAt: timestamp,
+          currentBookingId: bookingId
+        });
+
+        return { bookingId, orderData };
+      });
+
+      return result;
+    } catch (error) {
+      console.error('Firebase transaction error:', error);
+      throw new Error(error.message || 'An error occurred during booking');
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsProcessing(true);
+    setPaymentError(null);
+
+    try {
+      // Create Stripe payment method
+      const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: elements.getElement(CardElement),
+        billing_details: {
+          name: billingDetails.name,
+          email: billingDetails.email,
+        },
+      });
+
+      if (paymentMethodError) {
+        throw new Error(paymentMethodError.message);
+      }
+
+      // Process payment
+      const paymentData = {
+        status: 'success',
+        transactionId: `pm_${Date.now()}`,
+        amount: validatedPrice,
+        paymentMethod: paymentMethod,
       };
 
-      // Perform all updates within the transaction
-      transaction.set(bookingRef, bookingData);
-      transaction.set(orderRef, orderData);
-      transaction.update(accommodationRef, {
-        status: 'booked',
-        lastBookedAt: timestamp,
-        currentBookingId: bookingId
-      });
-    });
+      // Update Firebase
+      const result = await updateFirebaseAfterPayment(paymentData);
 
-    return true;
-  } catch (error) {
-    console.error('Firebase transaction error:', error);
-    // Provide more specific error messages based on the error type
-    if (error.code === 'permission-denied') {
-      throw new Error('You do not have permission to make this booking');
-    } else if (error.code === 'not-found') {
-      throw new Error('The selected accommodation is no longer available');
-    } else if (error.message.includes('Accommodation is no longer available')) {
-      throw new Error('This accommodation was just booked by someone else');
+      // Update UI and state
+      dispatch(setPaymentSuccess(true));
+      setLocalPaymentSuccess(true);
+      onPaymentComplete({ ...paymentData, ...result });
+
+      setTimeout(() => onClose(), 2000);
+    } catch (err) {
+      console.error('Payment Error:', err);
+      setPaymentError(err.message || 'Payment failed. Please try again.');
+      dispatch(setPaymentSuccess(false));
+    } finally {
+      setIsProcessing(false);
     }
-    throw new Error(`Booking failed: ${error.message}`);
-  }
-};
-
-const handleSubmit = async (event) => {
-  event.preventDefault();
-
-  if (!stripe || !elements || !currentUser?.uid) {
-    setPaymentError('Please login to continue with payment');
-    return;
-  }
-
-  if (!validateForm()) {
-    return;
-  }
-
-  setIsProcessing(true);
-  setPaymentError(null);
-
-  try {
-    // Create Stripe payment method
-    const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
-      type: 'card',
-      card: elements.getElement(CardElement),
-      billing_details: {
-        name: billingDetails.name,
-        email: billingDetails.email,
-      },
-    });
-
-    if (paymentMethodError) {
-      throw new Error(paymentMethodError.message);
-    }
-
-    // Process payment (replace with actual Stripe payment processing)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const paymentData = {
-      status: 'success',
-      transactionId: `pm_${Date.now()}`, // Replace with actual Stripe payment intent ID
-      amount: bookingDetails.price,
-      paymentMethod: paymentMethod,
-    };
-
-    // Update Firebase after successful payment
-    await updateFirebaseAfterPayment(paymentData);
-
-    // Update Redux state and UI
-    dispatch(setPaymentSuccess(true));
-    setLocalPaymentSuccess(true);
-    onPaymentComplete(paymentData);
-
-    // Close dialog after success
-    setTimeout(() => onClose(), 2000);
-  } catch (err) {
-    console.error('Payment Error:', err);
-    setPaymentError(err.message || 'Payment failed. Please try again.');
-    dispatch(setPaymentSuccess(false));
-  } finally {
-    setIsProcessing(false);
-  }
-
-};
+  };
 
   const formatDate = (dateString) => {
     try {
@@ -426,7 +482,7 @@ const handleSubmit = async (event) => {
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      onClose={!isProcessing ? onClose : undefined}
       maxWidth="sm"
       fullWidth
       PaperProps={{
@@ -458,7 +514,7 @@ const handleSubmit = async (event) => {
                 </Typography>
 
                 <Typography variant="h6" sx={{ mt: 2 }}>
-                  Total: {formatZAR(formattedPrice)}
+                  Total: {formatZAR(validatedPrice)}
                 </Typography>
               </CardContent>
             </Card>
@@ -467,12 +523,14 @@ const handleSubmit = async (event) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
+                  required
                   label="Full Name"
                   name="name"
                   value={billingDetails.name}
                   onChange={handleInputChange}
                   error={!!formErrors.name}
                   helperText={formErrors.name}
+                  disabled={isProcessing}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -485,6 +543,7 @@ const handleSubmit = async (event) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
+                  required
                   label="Email"
                   name="email"
                   type="email"
@@ -492,6 +551,7 @@ const handleSubmit = async (event) => {
                   onChange={handleInputChange}
                   error={!!formErrors.email}
                   helperText={formErrors.email}
+                  disabled={isProcessing}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -510,6 +570,8 @@ const handleSubmit = async (event) => {
                 borderRadius: 1,
                 p: 2,
                 mb: 2,
+                opacity: isProcessing ? 0.7 : 1,
+                pointerEvents: isProcessing ? 'none' : 'auto'
               }}
             >
               <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -531,6 +593,11 @@ const handleSubmit = async (event) => {
                 {paymentError}
               </Alert>
             )}
+            {formErrors.price && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {formErrors.price}
+              </Alert>
+            )}
           </Box>
         </DialogContent>
 
@@ -548,7 +615,7 @@ const handleSubmit = async (event) => {
             disabled={isProcessing || !stripe}
             startIcon={isProcessing ? <CircularProgress size={20} /> : null}
           >
-            {isProcessing ? 'Processing...' : `Pay ${formatZAR(formattedPrice)}`}
+            {isProcessing ? 'Processing...' : `Pay ${formatZAR(validatedPrice)}`}
           </Button>
         </DialogActions>
       </form>
