@@ -21,21 +21,14 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
-import { 
-  doc, 
-  collection, 
-  setDoc, 
-  updateDoc, 
-  serverTimestamp,
-  runTransaction,
-  query,
-  where 
-} from 'firebase/firestore';
+// import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../service/Firebase';
 import { setPaymentSuccess } from '../redux/slices/PaymentSlice';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
+import { query, where } from 'firebase/firestore';
 
 
 const formatZAR = (amount) => {
@@ -181,123 +174,6 @@ const updateFirebaseAfterPayment = async (paymentData) => {
       if (accommodationData.status === 'booked') {
         throw new Error('Accommodation is no longer available');
       }
-
-      const updateFirebaseAfterPayment = async (paymentData) => {
-        if (!currentUser?.uid) {
-          throw new Error('User not authenticated');
-        }
-      
-        try {
-          const timestamp = serverTimestamp();
-          const bookingId = `booking_${Date.now()}_${currentUser.uid}`;
-      
-          // Start a transaction
-          await runTransaction(db, async (transaction) => {
-            // Check accommodation availability
-            const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
-            const accommodationDoc = await transaction.get(accommodationRef);
-      
-            if (!accommodationDoc.exists()) {
-              throw new Error('Accommodation not found');
-            }
-      
-            const accommodationData = accommodationDoc.data();
-            
-            // Check if the accommodation is already booked
-            if (accommodationData.status === 'booked') {
-              throw new Error('Accommodation is no longer available');
-            }
-      
-            // Check if the dates are still available
-            const isDateConflict = await checkDateConflicts(
-              transaction,
-              bookingDetails.accommodationId,
-              bookingDetails.checkInDate,
-              bookingDetails.checkOutDate
-            );
-      
-            if (isDateConflict) {
-              throw new Error('Selected dates are no longer available');
-            }
-      
-            // Create booking document
-            const bookingRef = doc(db, 'bookings', bookingId);
-            const bookingData = {
-              userId: currentUser.uid,
-              accommodationId: bookingDetails.accommodationId,
-              accommodationName: bookingDetails.accommodationName,
-              checkInDate: new Date(bookingDetails.checkInDate),
-              checkOutDate: new Date(bookingDetails.checkOutDate),
-              price: parseFloat(bookingDetails.price),
-              status: 'confirmed',
-              paymentId: paymentData.transactionId,
-              customerName: billingDetails.name,
-              customerEmail: billingDetails.email,
-              createdAt: timestamp,
-              updatedAt: timestamp
-            };
-      
-            // Create order document
-            const orderRef = doc(collection(db, 'orders'), bookingId);
-            const orderData = {
-              ...bookingData,
-              orderStatus: 'completed',
-              paymentMethod: 'card',
-              paymentDetails: {
-                last4: paymentData.paymentMethod.card.last4,
-                brand: paymentData.paymentMethod.card.brand,
-                expiryMonth: paymentData.paymentMethod.card.exp_month,
-                expiryYear: paymentData.paymentMethod.card.exp_year
-              }
-            };
-      
-            // Perform all updates atomically
-            transaction.set(bookingRef, bookingData);
-            transaction.set(orderRef, orderData);
-            transaction.update(accommodationRef, {
-              status: 'booked',
-              lastBookedAt: timestamp,
-              currentBookingId: bookingId,
-              lastBookedBy: currentUser.uid
-            });
-          });
-      
-          return true;
-        } catch (error) {
-          console.error('Firebase transaction error:', error);
-          throw new Error(getErrorMessage(error));
-        }
-      };
-      
-      // Helper function to check for date conflicts
-      const checkDateConflicts = async (transaction, accommodationId, checkIn, checkOut) => {
-        const bookingsRef = collection(db, 'bookings');
-        const existingBookings = await transaction.get(
-          query(
-            bookingsRef,
-            where('accommodationId', '==', accommodationId),
-            where('status', '==', 'confirmed'),
-            where('checkOutDate', '>', new Date(checkIn)),
-            where('checkInDate', '<', new Date(checkOut))
-          )
-        );
-      
-        return !existingBookings.empty;
-      };
-      
-      // Helper function to get user-friendly error messages
-      const getErrorMessage = (error) => {
-        switch (error.code) {
-          case 'permission-denied':
-            return 'You do not have permission to make this booking';
-          case 'not-found':
-            return 'The selected accommodation is no longer available';
-          case 'failed-precondition':
-            return 'This accommodation was just booked by someone else';
-          default:
-            return error.message || 'Booking failed. Please try again.';
-        }
-      };
 
       // Create booking document
       const bookingRef = doc(db, 'bookings', bookingId);

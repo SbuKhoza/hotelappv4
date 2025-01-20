@@ -21,21 +21,14 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
-import { 
-  doc, 
-  collection, 
-  setDoc, 
-  updateDoc, 
-  serverTimestamp,
-  runTransaction,
-  query,
-  where 
-} from 'firebase/firestore';
+// import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../service/Firebase';
 import { setPaymentSuccess } from '../redux/slices/PaymentSlice';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import PersonIcon from '@mui/icons-material/Person';
 import EmailIcon from '@mui/icons-material/Email';
+import { query, where } from 'firebase/firestore';
 
 
 const formatZAR = (amount) => {

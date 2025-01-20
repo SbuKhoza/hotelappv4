@@ -21,16 +21,8 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js';
-import { 
-  doc, 
-  collection, 
-  setDoc, 
-  updateDoc, 
-  serverTimestamp,
-  runTransaction,
-  query,
-  where 
-} from 'firebase/firestore';
+// import { doc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, collection, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../service/Firebase';
 import { setPaymentSuccess } from '../redux/slices/PaymentSlice';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
@@ -157,147 +149,14 @@ const PaymentForm = ({
     }
   };
 
+  const updateFirebaseAfterPayment = async (paymentData) => {
+    try {
+      if (!currentUser?.uid) {
+        throw new Error('User not authenticated');
+      }
 
-const updateFirebaseAfterPayment = async (paymentData) => {
-  if (!currentUser?.uid) {
-    throw new Error('User not authenticated');
-  }
-
-  try {
-    // Use a transaction to ensure all updates succeed or fail together
-    await runTransaction(db, async (transaction) => {
       const timestamp = serverTimestamp();
       const bookingId = `booking_${Date.now()}_${currentUser.uid}`;
-
-      // Check if accommodation is still available
-      const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
-      const accommodationDoc = await transaction.get(accommodationRef);
-
-      if (!accommodationDoc.exists()) {
-        throw new Error('Accommodation not found');
-      }
-
-      const accommodationData = accommodationDoc.data();
-      if (accommodationData.status === 'booked') {
-        throw new Error('Accommodation is no longer available');
-      }
-
-      const updateFirebaseAfterPayment = async (paymentData) => {
-        if (!currentUser?.uid) {
-          throw new Error('User not authenticated');
-        }
-      
-        try {
-          const timestamp = serverTimestamp();
-          const bookingId = `booking_${Date.now()}_${currentUser.uid}`;
-      
-          // Start a transaction
-          await runTransaction(db, async (transaction) => {
-            // Check accommodation availability
-            const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
-            const accommodationDoc = await transaction.get(accommodationRef);
-      
-            if (!accommodationDoc.exists()) {
-              throw new Error('Accommodation not found');
-            }
-      
-            const accommodationData = accommodationDoc.data();
-            
-            // Check if the accommodation is already booked
-            if (accommodationData.status === 'booked') {
-              throw new Error('Accommodation is no longer available');
-            }
-      
-            // Check if the dates are still available
-            const isDateConflict = await checkDateConflicts(
-              transaction,
-              bookingDetails.accommodationId,
-              bookingDetails.checkInDate,
-              bookingDetails.checkOutDate
-            );
-      
-            if (isDateConflict) {
-              throw new Error('Selected dates are no longer available');
-            }
-      
-            // Create booking document
-            const bookingRef = doc(db, 'bookings', bookingId);
-            const bookingData = {
-              userId: currentUser.uid,
-              accommodationId: bookingDetails.accommodationId,
-              accommodationName: bookingDetails.accommodationName,
-              checkInDate: new Date(bookingDetails.checkInDate),
-              checkOutDate: new Date(bookingDetails.checkOutDate),
-              price: parseFloat(bookingDetails.price),
-              status: 'confirmed',
-              paymentId: paymentData.transactionId,
-              customerName: billingDetails.name,
-              customerEmail: billingDetails.email,
-              createdAt: timestamp,
-              updatedAt: timestamp
-            };
-      
-            // Create order document
-            const orderRef = doc(collection(db, 'orders'), bookingId);
-            const orderData = {
-              ...bookingData,
-              orderStatus: 'completed',
-              paymentMethod: 'card',
-              paymentDetails: {
-                last4: paymentData.paymentMethod.card.last4,
-                brand: paymentData.paymentMethod.card.brand,
-                expiryMonth: paymentData.paymentMethod.card.exp_month,
-                expiryYear: paymentData.paymentMethod.card.exp_year
-              }
-            };
-      
-            // Perform all updates atomically
-            transaction.set(bookingRef, bookingData);
-            transaction.set(orderRef, orderData);
-            transaction.update(accommodationRef, {
-              status: 'booked',
-              lastBookedAt: timestamp,
-              currentBookingId: bookingId,
-              lastBookedBy: currentUser.uid
-            });
-          });
-      
-          return true;
-        } catch (error) {
-          console.error('Firebase transaction error:', error);
-          throw new Error(getErrorMessage(error));
-        }
-      };
-      
-      // Helper function to check for date conflicts
-      const checkDateConflicts = async (transaction, accommodationId, checkIn, checkOut) => {
-        const bookingsRef = collection(db, 'bookings');
-        const existingBookings = await transaction.get(
-          query(
-            bookingsRef,
-            where('accommodationId', '==', accommodationId),
-            where('status', '==', 'confirmed'),
-            where('checkOutDate', '>', new Date(checkIn)),
-            where('checkInDate', '<', new Date(checkOut))
-          )
-        );
-      
-        return !existingBookings.empty;
-      };
-      
-      // Helper function to get user-friendly error messages
-      const getErrorMessage = (error) => {
-        switch (error.code) {
-          case 'permission-denied':
-            return 'You do not have permission to make this booking';
-          case 'not-found':
-            return 'The selected accommodation is no longer available';
-          case 'failed-precondition':
-            return 'This accommodation was just booked by someone else';
-          default:
-            return error.message || 'Booking failed. Please try again.';
-        }
-      };
 
       // Create booking document
       const bookingRef = doc(db, 'bookings', bookingId);
@@ -315,6 +174,7 @@ const updateFirebaseAfterPayment = async (paymentData) => {
         createdAt: timestamp,
         updatedAt: timestamp
       };
+      await setDoc(bookingRef, bookingData);
 
       // Create order document
       const orderRef = doc(collection(db, 'orders'), bookingId);
@@ -329,30 +189,21 @@ const updateFirebaseAfterPayment = async (paymentData) => {
           expiryYear: paymentData.paymentMethod.card.exp_year
         }
       };
+      await setDoc(orderRef, orderData);
 
-      // Perform all updates within the transaction
-      transaction.set(bookingRef, bookingData);
-      transaction.set(orderRef, orderData);
-      transaction.update(accommodationRef, {
+      // Update accommodation status
+      const accommodationRef = doc(db, 'accommodations', bookingDetails.accommodationId);
+      await updateDoc(accommodationRef, {
         status: 'booked',
         lastBookedAt: timestamp,
         currentBookingId: bookingId
       });
-    });
 
-    return true;
-  } catch (error) {
-    console.error('Firebase transaction error:', error);
-    // Provide more specific error messages based on the error type
-    if (error.code === 'permission-denied') {
-      throw new Error('You do not have permission to make this booking');
-    } else if (error.code === 'not-found') {
-      throw new Error('The selected accommodation is no longer available');
-    } else if (error.message.includes('Accommodation is no longer available')) {
-      throw new Error('This accommodation was just booked by someone else');
+      return true;
+    } catch (error) {
+      console.error('Firebase update error:', error);
+      throw new Error('Failed to update booking status');
     }
-    throw new Error(`Booking failed: ${error.message}`);
-  }
 };
 
 const handleSubmit = async (event) => {
@@ -363,56 +214,54 @@ const handleSubmit = async (event) => {
     return;
   }
 
-  if (!validateForm()) {
-    return;
-  }
-
-  setIsProcessing(true);
-  setPaymentError(null);
-
-  try {
-    // Create Stripe payment method
-    const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
-      type: 'card',
-      card: elements.getElement(CardElement),
-      billing_details: {
-        name: billingDetails.name,
-        email: billingDetails.email,
-      },
-    });
-
-    if (paymentMethodError) {
-      throw new Error(paymentMethodError.message);
+    if (!validateForm()) {
+      return;
     }
 
-    // Process payment (replace with actual Stripe payment processing)
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    setIsProcessing(true);
+    setPaymentError(null);
 
-    const paymentData = {
-      status: 'success',
-      transactionId: `pm_${Date.now()}`, // Replace with actual Stripe payment intent ID
-      amount: bookingDetails.price,
-      paymentMethod: paymentMethod,
-    };
+    try {
+      const { error: paymentMethodError, paymentMethod } = await stripe.createPaymentMethod({
+        type: 'card',
+        card: elements.getElement(CardElement),
+        billing_details: {
+          name: billingDetails.name,
+          email: billingDetails.email,
+        },
+      });
 
-    // Update Firebase after successful payment
-    await updateFirebaseAfterPayment(paymentData);
+      if (paymentMethodError) {
+        throw new Error(paymentMethodError.message);
+      }
 
-    // Update Redux state and UI
-    dispatch(setPaymentSuccess(true));
-    setLocalPaymentSuccess(true);
-    onPaymentComplete(paymentData);
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Close dialog after success
-    setTimeout(() => onClose(), 2000);
-  } catch (err) {
-    console.error('Payment Error:', err);
-    setPaymentError(err.message || 'Payment failed. Please try again.');
-    dispatch(setPaymentSuccess(false));
-  } finally {
-    setIsProcessing(false);
-  }
+      const paymentData = {
+        status: 'success',
+        transactionId: paymentMethod.id,
+        amount: bookingDetails.price,
+        paymentMethod: paymentMethod,
+      };
 
+      // Update Firebase after successful payment
+      await updateFirebaseAfterPayment(paymentData);
+
+      // Update both Redux and local state
+      dispatch(setPaymentSuccess(true));
+      setLocalPaymentSuccess(true);
+      onPaymentComplete(paymentData);
+
+      setTimeout(() => onClose(), 2000);
+    } catch (err) {
+      setPaymentError(err.message);
+      console.error('Payment Error:', err);
+      // Dispatch failure state to Redux
+      dispatch(setPaymentSuccess(false));
+    } finally {
+      setIsProcessing(false);
+    }
 };
 
   const formatDate = (dateString) => {
