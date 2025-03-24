@@ -26,7 +26,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
-import { clearPaymentStatus } from '../redux/slices/PaymentSlice';
+import { clearPaymentStatus } from '../redux/';
 import PaymentForm from '../components/PaymentForm';
 
 const formatZAR = (amount) => {

@@ -26,7 +26,6 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
 import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
-import { clearPaymentStatus } from '../redux/slices/PaymentSlice';
 import PaymentForm from '../components/PaymentForm';
 
 const formatZAR = (amount) => {
@@ -65,7 +64,7 @@ function Accommodation() {
   const dispatch = useDispatch();
   const bookingStatus = useSelector((state) => state.booking.status);
   const bookingError = useSelector((state) => state.booking.error);
-  const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
+  
 
   // States
   const [accommodations, setAccommodations] = useState([]);
@@ -81,18 +80,9 @@ function Accommodation() {
   });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
 
-
-  // Payment success effect
-  useEffect(() => {
-    if (paymentSuccess) {
-      setBookingOpen(false);
-      dispatch(clearPaymentStatus());
-      setSnackbarOpen(true);
-    }
-  }, [paymentSuccess, dispatch]);
-
-  // Fetch accommodations effect
+  // Fetch accommodations on component mount
   useEffect(() => {
     const fetchAccommodations = async () => {
       try {
@@ -112,6 +102,7 @@ function Accommodation() {
             return { ...data, id: doc.id, imageUrls: [] };
           }
         }));
+
         setAccommodations(accommodationList);
         setLoading(false);
       } catch (error) {
@@ -173,13 +164,27 @@ function Accommodation() {
   };
 
   const handlePaymentComplete = async (paymentDetails) => {
+    const bookingPayload = {
+      accommodationId: selectedAccommodation.id,
+      accommodationName: selectedAccommodation.name,
+      checkInDate: bookingData.checkInDate.toISOString(),
+      checkOutDate: bookingData.checkOutDate.toISOString(),
+      numberOfGuests: bookingData.numberOfGuests,
+      price: selectedAccommodation.price,
+      userId: 'guest',
+      status: 'confirmed',
+      createdAt: new Date().toISOString(),
+      paymentDetails
+    };
+
     try {
+      await dispatch(createBooking(bookingPayload)).unwrap();
       setPaymentOpen(false);
-      setBookingOpen(false);
+      setError(null);
       setSnackbarOpen(true);
     } catch (error) {
-      console.error('Error handling payment completion:', error);
-      setError(error.message || 'Failed to complete booking');
+      console.error('Booking failed:', error);
+      setError(error.message || 'Failed to create booking');
       setSnackbarOpen(true);
     }
   };
@@ -204,7 +209,6 @@ function Accommodation() {
     swipeable: true,
     showArrows: true,
   };
-
 
   if (loading) {
     return (
@@ -401,44 +405,48 @@ function Accommodation() {
             {bookingStatus === 'loading' ? <CircularProgress size={24} /> : 'Confirm Booking'}
           </Button>
         </DialogActions>
-      </Dialog>
+      
+        </Dialog>
 
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => {
-          setSnackbarOpen(false);
-          dispatch(clearBookingStatus());
-        }}
-      >
-        <Alert
-          onClose={() => {
-            setSnackbarOpen(false);
-            dispatch(clearBookingStatus());
-          }}
-          severity={paymentSuccess ? 'success' : 'error'}
-          sx={{ width: '100%' }}
-        >
-          {paymentSuccess
-            ? 'Booking confirmed successfully!'
-            : error || 'Please fill in all required fields'}
-        </Alert>
-      </Snackbar>
+{/* Success/Error Snackbar */}
+<Snackbar
+  open={snackbarOpen}
+  autoHideDuration={6000}
+  onClose={() => {
+    setSnackbarOpen(false);
+    dispatch(clearBookingStatus());
+  }}
+>
+  <Alert
+    onClose={() => {
+      setSnackbarOpen(false);
+      dispatch(clearBookingStatus());
+    }}
+    severity={bookingStatus === 'succeeded' ? 'success' : 'error'}
+    sx={{ width: '100%' }}
+  >
+    {bookingStatus === 'succeeded'
+      ? 'Booking confirmed successfully!'
+      : error || bookingError || 'Please fill in all required fields'}
+  </Alert>
+</Snackbar>
 
-      <PaymentForm
-        open={paymentOpen}
-        onClose={() => setPaymentOpen(false)}
-        bookingDetails={{
-          accommodationName: selectedAccommodation?.name,
-          checkInDate: bookingData.checkInDate,
-          checkOutDate: bookingData.checkOutDate,
-          numberOfGuests: bookingData.numberOfGuests,
-          price: selectedAccommodation?.price
-        }}
-        onPaymentComplete={handlePaymentComplete}
-      />
-    </Box>
-  );
+{/* Payment Form Dialog */}
+<PaymentForm
+  open={paymentOpen}
+  onClose={() => setPaymentOpen(false)}
+  bookingDetails={{
+    accommodationName: selectedAccommodation?.name,
+    checkInDate: bookingData.checkInDate,
+    checkOutDate: bookingData.checkOutDate,
+    numberOfGuests: bookingData.numberOfGuests,
+    price: selectedAccommodation?.price
+  }}
+  onPaymentComplete={handlePaymentComplete}
+/>
+
+</Box>
+);
 }
 
 export default Accommodation;

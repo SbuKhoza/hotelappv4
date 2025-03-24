@@ -27,27 +27,15 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
   const [email, setEmail] = useState('');
 
-  // Reset states when modal opens
-  useEffect(() => {
-    if (open) {
-      setError('');
-      setIsProcessing(false);
-      dispatch(clearPaymentStatus());
-    }
-  }, [open, dispatch]);
-
   useEffect(() => {
     if (user?.email) {
       setEmail(user.email);
     }
   }, [user]);
 
-  // Handle booking status changes
   useEffect(() => {
     if (bookingStatus === 'failed') {
       setError('Failed to create booking. Please contact support.');
-      setIsProcessing(false);
-    } else if (bookingStatus === 'succeeded') {
       setIsProcessing(false);
     }
   }, [bookingStatus]);
@@ -91,22 +79,29 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
       }
 
       const bookingPayload = {
+        // Booking details
         accommodationId: bookingDetails.accommodationId,
         accommodationName: bookingDetails.accommodationName,
         checkInDate: bookingDetails.checkInDate.toISOString(),
         checkOutDate: bookingDetails.checkOutDate.toISOString(),
         numberOfGuests: bookingDetails.numberOfGuests,
         price: bookingDetails.price,
+        
+        // Payment details
         paymentId: reference.reference,
         paymentStatus: 'completed',
         paymentReference: {
           ...reference,
           processingDate: new Date().toISOString()
         },
+        
+        // User details
         email: user.email,
         userId: user.uid,
         userName: user.displayName || user.email,
         customerContact: user.phoneNumber || '',
+        
+        // Metadata
         bookingType: 'accommodation',
         currency: 'ZAR',
         status: 'confirmed',
@@ -118,10 +113,7 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
       const result = await dispatch(createBooking(bookingPayload)).unwrap();
       
       if (result.id) {
-        dispatch(setPaymentSuccess({ 
-          ...reference, 
-          bookingId: result.id 
-        }));
+        dispatch(setPaymentSuccess(reference));
         onPaymentComplete && onPaymentComplete({ 
           ...reference, 
           bookingId: result.id 
@@ -132,6 +124,8 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
     } catch (error) {
       console.error('Error in payment success handler:', error);
       setError(error.message || 'Failed to process booking. Please contact support.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -174,18 +168,10 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
     onClose();
   };
 
-  // Prevent closing the dialog by clicking outside when payment is successful
-  const handleDialogClose = (event, reason) => {
-    if (paymentSuccess) {
-      return; // Do nothing if payment is successful
-    }
-    onClose(); // Otherwise, close normally
-  };
-
   return (
     <Dialog 
       open={open} 
-      onClose={handleDialogClose}
+      onClose={paymentSuccess ? undefined : onClose}
       maxWidth="sm" 
       fullWidth
       PaperProps={{
