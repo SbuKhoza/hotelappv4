@@ -22,11 +22,17 @@ const Banner = () => {
           muted
           loop
           playsInline
+          loading="lazy"
           style={{ minWidth: '100vw' }}
         >
           <source src="/images/banner.mp4" type="video/mp4" />
           Your browser does not support the video tag.
         </video>
+      </div>
+      <div className="absolute inset-0 flex items-start justify-center pt-32">
+        {/* <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white text-center drop-shadow-lg">
+          Book your Steady<br />Enjoy your Stay
+        </h1> */}
       </div>
     </div>
   );

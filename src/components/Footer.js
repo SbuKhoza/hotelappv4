@@ -48,7 +48,7 @@ function Footer() {
     <Box
       component="footer"
       sx={{
-        backgroundColor: 'primary.main',
+        backgroundColor: 'black', // Changed from primary.main to black
         color: 'primary.contrastText',
         pt: 6,
         pb: 3,
