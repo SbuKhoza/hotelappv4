@@ -81,14 +81,16 @@ function Accommodation() {
   });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
-
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Payment success effect
   useEffect(() => {
     if (paymentSuccess) {
       setBookingOpen(false);
-      dispatch(clearPaymentStatus());
+      setPaymentOpen(false);
+      setSuccessMessage('Booking confirmed successfully!');
       setSnackbarOpen(true);
+      dispatch(clearPaymentStatus());
     }
   }, [paymentSuccess, dispatch]);
 
@@ -174,9 +176,9 @@ function Accommodation() {
 
   const handlePaymentComplete = async (paymentDetails) => {
     try {
-      setPaymentOpen(false);
-      setBookingOpen(false);
+      setSuccessMessage('Booking confirmed successfully!');
       setSnackbarOpen(true);
+      // Payment form will auto-close due to the useEffect in PaymentForm component
     } catch (error) {
       console.error('Error handling payment completion:', error);
       setError(error.message || 'Failed to complete booking');
@@ -205,7 +207,6 @@ function Accommodation() {
     showArrows: true,
   };
 
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -214,7 +215,7 @@ function Accommodation() {
     );
   }
 
-  if (error) {
+  if (error && !snackbarOpen) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Alert severity="error">{error}</Alert>
@@ -409,19 +410,21 @@ function Accommodation() {
         onClose={() => {
           setSnackbarOpen(false);
           dispatch(clearBookingStatus());
+          setError(null);
+          setSuccessMessage('');
         }}
       >
         <Alert
           onClose={() => {
             setSnackbarOpen(false);
             dispatch(clearBookingStatus());
+            setError(null);
+            setSuccessMessage('');
           }}
-          severity={paymentSuccess ? 'success' : 'error'}
+          severity={successMessage ? 'success' : 'error'}
           sx={{ width: '100%' }}
         >
-          {paymentSuccess
-            ? 'Booking confirmed successfully!'
-            : error || 'Please fill in all required fields'}
+          {successMessage || error || 'Please fill in all required fields'}
         </Alert>
       </Snackbar>
 
@@ -429,6 +432,7 @@ function Accommodation() {
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         bookingDetails={{
+          accommodationId: selectedAccommodation?.id,
           accommodationName: selectedAccommodation?.name,
           checkInDate: bookingData.checkInDate,
           checkOutDate: bookingData.checkOutDate,

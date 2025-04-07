@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { usePaystackPayment } from 'react-paystack';
 import { createBooking } from '../redux/slices/bookingSlice';
-import { setPaymentSuccess, clearPaymentStatus } from '../redux/slices/PaymentSlice';
+import { 
+  setPaymentSuccess, 
+  clearPaymentStatus, 
+  createOrderAfterPayment 
+} from '../redux/slices/PaymentSlice';
 import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
@@ -25,32 +29,69 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   const user = useSelector((state) => state.user.user);
   const bookingStatus = useSelector((state) => state.booking.status);
   const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
+  const orderStatus = useSelector((state) => state.payment.orderStatus);
   const [email, setEmail] = useState('');
+  const [debugLog, setDebugLog] = useState([]);
+
+  // Helper function to add to debug log
+  const addDebugLog = (message) => {
+    console.log(message);
+    setDebugLog(prev => [...prev, `${new Date().toISOString().slice(11, 19)}: ${message}`]);
+  };
 
   // Reset states when modal opens
   useEffect(() => {
     if (open) {
       setError('');
       setIsProcessing(false);
+      setDebugLog([]);
       dispatch(clearPaymentStatus());
+      addDebugLog('Modal opened, states reset');
     }
   }, [open, dispatch]);
 
   useEffect(() => {
     if (user?.email) {
       setEmail(user.email);
+      addDebugLog(`User email set: ${user.email}`);
     }
   }, [user]);
 
+  // Auto-close modal on successful payment after a brief delay to show success message
+  useEffect(() => {
+    if (paymentSuccess) {
+      addDebugLog('Payment success detected, preparing to close modal');
+      // Add a slight delay before closing to show success message
+      setTimeout(() => {
+        addDebugLog('Closing modal after success delay');
+        onPaymentComplete && onPaymentComplete(paymentSuccess);
+        handleDone();
+      }, 3000); // Close after 3 seconds
+    }
+  }, [paymentSuccess, onPaymentComplete]);
+
   // Handle booking status changes
   useEffect(() => {
+    addDebugLog(`Booking status changed to: ${bookingStatus}`);
     if (bookingStatus === 'failed') {
       setError('Failed to create booking. Please contact support.');
       setIsProcessing(false);
+      addDebugLog('Booking creation failed');
     } else if (bookingStatus === 'succeeded') {
+      addDebugLog('Booking creation succeeded');
       setIsProcessing(false);
     }
   }, [bookingStatus]);
+
+  // Handle order status changes
+  useEffect(() => {
+    addDebugLog(`Order status changed to: ${orderStatus}`);
+    if (orderStatus === 'failed') {
+      setError('Failed to create order. Please contact support.');
+      setIsProcessing(false);
+      addDebugLog('Order creation failed');
+    }
+  }, [orderStatus]);
 
   const validateAndParsePrice = (price) => {
     try {
@@ -85,8 +126,11 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
 
   const onSuccess = async (reference) => {
     setIsProcessing(true);
+    addDebugLog(`Payment successful with reference: ${reference.reference}`);
+    
     try {
       if (!user) {
+        addDebugLog('Error: No user found');
         throw new Error('User authentication required');
       }
 
@@ -114,30 +158,51 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
         updatedAt: new Date().toISOString()
       };
 
-      console.log('Creating booking with payload:', bookingPayload);
-      const result = await dispatch(createBooking(bookingPayload)).unwrap();
+      addDebugLog('Creating booking with payload');
       
-      if (result.id) {
-        dispatch(setPaymentSuccess({ 
-          ...reference, 
-          bookingId: result.id 
-        }));
-        onPaymentComplete && onPaymentComplete({ 
-          ...reference, 
-          bookingId: result.id 
-        });
-      } else {
-        throw new Error('Failed to create booking record');
+      try {
+        addDebugLog('Dispatching createBooking action');
+        const result = await dispatch(createBooking(bookingPayload)).unwrap();
+        addDebugLog(`Booking created with ID: ${result?.id || 'unknown'}`);
+        
+        if (result && result.id) {
+          // Create order in Firebase after successful booking
+          const orderPayload = {
+            ...bookingPayload,
+            bookingId: result.id,
+            orderType: 'accommodation',
+            orderStatus: 'confirmed'
+          };
+          
+          addDebugLog('Creating order after successful booking');
+          await dispatch(createOrderAfterPayment(orderPayload)).unwrap();
+          addDebugLog('Order created successfully');
+          
+          addDebugLog('Setting payment success status');
+          dispatch(setPaymentSuccess({ 
+            ...reference, 
+            bookingId: result.id 
+          }));
+        } else {
+          addDebugLog('Error: Invalid result from booking creation');
+          throw new Error('Failed to create booking record');
+        }
+      } catch (dispatchError) {
+        addDebugLog(`Error in dispatch: ${dispatchError.message}`);
+        throw dispatchError;
       }
     } catch (error) {
       console.error('Error in payment success handler:', error);
+      addDebugLog(`Error processing payment: ${error.message}`);
       setError(error.message || 'Failed to process booking. Please contact support.');
+      setIsProcessing(false);
     }
   };
 
   const handlePaystackClose = () => {
     setError('Payment was cancelled');
     setIsProcessing(false);
+    addDebugLog('Payment cancelled by user');
   };
 
   const initializePaystack = usePaystackPayment(config);
@@ -145,31 +210,38 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
+    addDebugLog('Payment submission initiated');
     
     try {
       if (!user) {
-        navigate('/login');
+        addDebugLog('No user logged in, redirecting to login');
+        navigate('/loginsignup');
         return;
       }
 
       if (!bookingDetails?.checkInDate || !bookingDetails?.checkOutDate) {
+        addDebugLog('Missing dates');
         setError('Please select check-in and check-out dates');
         return;
       }
 
       if (!amount || amount <= 0) {
+        addDebugLog('Invalid amount');
         setError('Invalid payment amount');
         return;
       }
 
+      addDebugLog('Initializing Paystack payment');
       initializePaystack(onSuccess, handlePaystackClose);
     } catch (error) {
       console.error('Error initializing payment:', error);
+      addDebugLog(`Payment initialization error: ${error.message}`);
       setError('Failed to initialize payment. Please try again.');
     }
   };
 
   const handleDone = () => {
+    addDebugLog('Handling done - clearing payment status');
     dispatch(clearPaymentStatus());
     onClose();
   };
@@ -177,8 +249,10 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   // Prevent closing the dialog by clicking outside when payment is successful
   const handleDialogClose = (event, reason) => {
     if (paymentSuccess) {
+      addDebugLog('Preventing dialog close - payment success in progress');
       return; // Do nothing if payment is successful
     }
+    addDebugLog('Dialog closing normally');
     onClose(); // Otherwise, close normally
   };
 
@@ -212,7 +286,7 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             {!user && (
               <Alert severity="warning" sx={{ mb: 2 }}>
-                Please <Button color="inherit" onClick={() => navigate('/login')}>log in</Button> to complete your booking
+                Please <Button color="inherit" onClick={() => navigate('/loginsignup')}>log in</Button> to complete your booking
               </Alert>
             )}
 
@@ -255,6 +329,20 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
               <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
               </Alert>
+            )}
+            
+            {/* Debug Log Display (you can comment this out in production) */}
+            {debugLog.length > 0 && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1, maxHeight: 150, overflow: 'auto' }}>
+                <Typography variant="caption" component="div" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
+                  Debug Log:
+                </Typography>
+                {debugLog.map((log, i) => (
+                  <Typography key={i} variant="caption" component="div" sx={{ fontFamily: 'monospace' }}>
+                    {log}
+                  </Typography>
+                ))}
+              </Box>
             )}
           </Box>
         )}
