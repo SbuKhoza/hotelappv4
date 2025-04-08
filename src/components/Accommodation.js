@@ -1,8 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { db, storage } from '../service/Firebase';
-import { collection, getDocs } from "firebase/firestore";
-import { ref, getDownloadURL, listAll } from "firebase/storage";
+import {
+  fetchAccommodations,
+  selectAccommodations,
+  selectLoading,
+  selectError
+} from '../redux/slices/accommodationSlice';
+import { clearBookingStatus } from '../redux/slices/bookingSlice';
+import { clearPaymentStatus } from '../redux/slices/PaymentSlice';
 import {
   Card,
   CardMedia,
@@ -25,8 +30,6 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Carousel } from 'react-responsive-carousel';
 import 'react-responsive-carousel/lib/styles/carousel.min.css';
-import { createBooking, clearBookingStatus } from '../redux/slices/bookingSlice';
-import { clearPaymentStatus } from '../redux/slices/PaymentSlice';
 import PaymentForm from '../components/PaymentForm';
 
 const formatZAR = (amount) => {
@@ -63,13 +66,13 @@ const MAX_GUESTS = {
 
 function Accommodation() {
   const dispatch = useDispatch();
+  const accommodations = useSelector(selectAccommodations);
+  const loading = useSelector(selectLoading);
+  const fetchError = useSelector(selectError);
   const bookingStatus = useSelector((state) => state.booking.status);
-  const bookingError = useSelector((state) => state.booking.error);
   const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
 
   // States
-  const [accommodations, setAccommodations] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
@@ -83,6 +86,11 @@ function Accommodation() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Fetch accommodations on component mount
+  useEffect(() => {
+    dispatch(fetchAccommodations());
+  }, [dispatch]);
+
   // Payment success effect
   useEffect(() => {
     if (paymentSuccess) {
@@ -93,38 +101,6 @@ function Accommodation() {
       dispatch(clearPaymentStatus());
     }
   }, [paymentSuccess, dispatch]);
-
-  // Fetch accommodations effect
-  useEffect(() => {
-    const fetchAccommodations = async () => {
-      try {
-        const accommodationCollection = collection(db, 'accommodation');
-        const accommodationSnapshot = await getDocs(accommodationCollection);
-        const accommodationList = await Promise.all(accommodationSnapshot.docs.map(async (doc) => {
-          const data = doc.data();
-          const imagesRef = ref(storage, `accommodations/${doc.id}`);
-          try {
-            const imagesList = await listAll(imagesRef);
-            const imageUrls = await Promise.all(
-              imagesList.items.map((imageRef) => getDownloadURL(imageRef))
-            );
-            return { ...data, id: doc.id, imageUrls };
-          } catch (error) {
-            console.error(`Error fetching images for accommodation ${doc.id}:`, error);
-            return { ...data, id: doc.id, imageUrls: [] };
-          }
-        }));
-        setAccommodations(accommodationList);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching accommodations:", error);
-        setError("Failed to load accommodations. Please try again later.");
-        setLoading(false);
-      }
-    };
-
-    fetchAccommodations();
-  }, []);
 
   const handleClickOpen = (accommodation) => {
     setSelectedAccommodation(accommodation);
@@ -215,10 +191,10 @@ function Accommodation() {
     );
   }
 
-  if (error && !snackbarOpen) {
+  if (fetchError) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity="error">{fetchError}</Alert>
       </Box>
     );
   }
@@ -236,7 +212,7 @@ function Accommodation() {
               <CardMedia
                 component="img"
                 height="200"
-                image={accommodation.imageUrls[0] || '/placeholder-image.jpg'}
+                image={accommodation.imageUrls && accommodation.imageUrls[0] || '/placeholder-image.jpg'}
                 alt={accommodation.name}
                 sx={{ objectFit: 'cover' }}
               />
@@ -294,11 +270,11 @@ function Accommodation() {
             <DialogContent>
               <Box sx={{ mb: 2 }}>
                 <Carousel {...carouselSettings}>
-                  {selectedAccommodation.imageUrls.map((url, index) => (
+                  {selectedAccommodation.imageUrls && selectedAccommodation.imageUrls.map((url, index) => (
                     <div key={index}>
                       <img
-                        src={url}
-                        alt={`${selectedAccommodation.name} - Image ${index + 1}`}
+                        src={url || "/placeholder.svg"}
+                        alt={`${selectedAccommodation.name} ${index + 1}`}
                         style={{ width: '100%', height: '50vh', objectFit: 'contain' }}
                       />
                     </div>

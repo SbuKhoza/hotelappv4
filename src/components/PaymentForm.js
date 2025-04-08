@@ -1,357 +1,457 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { usePaystackPayment } from 'react-paystack';
-import { createBooking } from '../redux/slices/bookingSlice';
-import { 
-  setPaymentSuccess, 
-  clearPaymentStatus, 
-  createOrderAfterPayment 
-} from '../redux/slices/PaymentSlice';
-import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  Typography,
-  Box,
   TextField,
-  Alert,
+  Box,
+  Typography,
   CircularProgress,
+  Alert,
+  Card,
+  CardContent,
+  Grid,
+  InputAdornment
 } from '@mui/material';
+import { 
+  createBooking 
+} from '../redux/slices/bookingSlice';
+import { 
+  createOrderAfterPayment,
+  setPaymentSuccess 
+} from '../redux/slices/PaymentSlice';
+import CreditCardIcon from '@mui/icons-material/CreditCard';
+import PersonIcon from '@mui/icons-material/Person';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import LockIcon from '@mui/icons-material/Lock';
 
-const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
+function PaymentForm({ open, onClose, bookingDetails, onPaymentComplete }) {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const [error, setError] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const user = useSelector((state) => state.user.user);
+  const user = useSelector((state) => state.auth.user);
   const bookingStatus = useSelector((state) => state.booking.status);
-  const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
   const orderStatus = useSelector((state) => state.payment.orderStatus);
-  const [email, setEmail] = useState('');
+  const bookingError = useSelector((state) => state.booking.error);
+  const orderError = useSelector((state) => state.payment.orderError);
+  
+  const [paymentData, setPaymentData] = useState({
+    number: '',
+    name: '',
+    expiry: '',
+    cvc: ''
+  });
+  
+  const [formErrors, setFormErrors] = useState({});
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Debug logging
+  // Effect to handle successful booking creation
   useEffect(() => {
-    if (open) {
-      console.log('Debug Log: Modal opened, states reset');
-      setError('');
+    if (bookingStatus === 'succeeded' && orderStatus === 'succeeded') {
+      // Both the booking and order were created successfully
       setIsProcessing(false);
-      dispatch(clearPaymentStatus());
-    }
-  }, [open, dispatch]);
-
-  useEffect(() => {
-    if (user?.email) {
-      setEmail(user.email);
-    }
-  }, [user]);
-
-  // Monitor payment success state
-  useEffect(() => {
-    console.log('Debug Log: Payment success state changed:', paymentSuccess);
-    if (paymentSuccess) {
-      console.log('Debug Log: Payment success detected, preparing to close modal');
-      // Add a slight delay before closing to show success message
-      setTimeout(() => {
-        onPaymentComplete && onPaymentComplete(paymentSuccess);
-        handleDone();
-      }, 3000); // Close after 3 seconds
-    }
-  }, [paymentSuccess, onPaymentComplete]);
-
-  // Monitor booking status
-  useEffect(() => {
-    console.log('Debug Log: Booking status changed:', bookingStatus);
-    if (bookingStatus === 'failed') {
-      setError('Failed to create booking. Please contact support.');
-      setIsProcessing(false);
-    } else if (bookingStatus === 'succeeded') {
-      console.log('Debug Log: Booking creation succeeded');
-      setIsProcessing(false);
-    }
-  }, [bookingStatus]);
-
-  // Monitor order status
-  useEffect(() => {
-    console.log('Debug Log: Order status changed:', orderStatus);
-    if (orderStatus === 'failed') {
-      setError('Failed to create order. Please contact support.');
-      setIsProcessing(false);
-    } else if (orderStatus === 'succeeded') {
-      console.log('Debug Log: Order creation succeeded');
-    }
-  }, [orderStatus]);
-
-  const validateAndParsePrice = (price) => {
-    try {
-      if (typeof price === 'string') {
-        return parseFloat(price.replace(/[^\d.-]/g, ''));
+      if (onPaymentComplete) {
+        onPaymentComplete({
+          paymentId: Math.random().toString(36).substr(2, 9), // Mock payment ID
+          status: 'completed'
+        });
       }
-      return parseFloat(price);
-    } catch (error) {
-      console.error('Price parsing error:', error);
-      return 0;
+      // Signal payment success to the Redux store
+      dispatch(setPaymentSuccess({
+        transactionId: Math.random().toString(36).substr(2, 9),
+        amount: bookingDetails.price,
+        timestamp: new Date().toISOString()
+      }));
     }
+  }, [bookingStatus, orderStatus, dispatch, onPaymentComplete, bookingDetails]);
+
+  // Effect to handle errors
+  useEffect(() => {
+    if (bookingStatus === 'failed' || orderStatus === 'failed') {
+      setIsProcessing(false);
+      setFormErrors({
+        payment: bookingError || orderError || 'Payment processing failed'
+      });
+    }
+  }, [bookingStatus, orderStatus, bookingError, orderError]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    
+    // Input validations
+    if (name === 'number') {
+      if (!/^\d*$/.test(value.replace(/\s/g, ''))) return;
+      // Format card number with spaces
+      const formattedValue = value.replace(/\s/g, '').replace(/(\d{4})/g, '$1 ').trim();
+      setPaymentData({
+        ...paymentData,
+        [name]: formattedValue
+      });
+      return;
+    }
+    
+    if (name === 'expiry') {
+      if (!/^\d*$/.test(value.replace('/', ''))) return;
+      // Format expiry as MM/YY
+      let formattedValue = value.replace(/\//g, '');
+      if (formattedValue.length > 2) {
+        formattedValue = formattedValue.substring(0, 2) + '/' + formattedValue.substring(2, 4);
+      }
+      setPaymentData({
+        ...paymentData,
+        [name]: formattedValue
+      });
+      return;
+    }
+    
+    if (name === 'cvc' && !/^\d*$/.test(value)) {
+      return;
+    }
+    
+    setPaymentData({
+      ...paymentData,
+      [name]: value
+    });
   };
 
-  const amount = bookingDetails?.price ? Math.round(validateAndParsePrice(bookingDetails.price) * 100) : 0;
-
-  const config = {
-    reference: `BOOK-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    email: email,
-    amount: amount,
-    publicKey: 'pk_test_83cc29f38b42ed879380c7af93c42c027c30d80f',
-    currency: 'ZAR',
-    metadata: {
-      custom_fields: [
-        {
-          display_name: "User ID",
-          variable_name: "user_id",
-          value: user?.uid || ''
-        }
-      ]
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!paymentData.number || paymentData.number.replace(/\s/g, '').length < 16) {
+      errors.number = 'Valid card number is required';
     }
+    
+    if (!paymentData.name) {
+      errors.name = 'Cardholder name is required';
+    }
+    
+    if (!paymentData.expiry || paymentData.expiry.length < 5) {
+      errors.expiry = 'Valid expiry date (MM/YY) is required';
+    } else {
+      const [month, year] = paymentData.expiry.split('/');
+      if (parseInt(month) < 1 || parseInt(month) > 12) {
+        errors.expiry = 'Month must be between 01-12';
+      }
+    }
+    
+    if (!paymentData.cvc || paymentData.cvc.length < 3) {
+      errors.cvc = 'Valid security code is required';
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
-  const onSuccess = async (reference) => {
-    console.log('Debug Log: Payment success callback received:', reference);
+  const formatCheckInDate = (date) => {
+    return date ? new Date(date).toISOString() : new Date().toISOString();
+  };
+  
+  const formatCheckOutDate = (date) => {
+    if (!date) {
+      // If checkout date is missing, set it to check-in date + 1 day
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow.toISOString();
+    }
+    return new Date(date).toISOString();
+  };
+
+  const formatPrice = (price) => {
+    if (!price) return "0";
+    
+    if (typeof price === 'object' && price.value) {
+      return price.value.toString();
+    }
+    if (typeof price === 'string') {
+      // Remove R, spaces, and commas then return as string
+      return price.replace(/[R\s,]/g, '');
+    }
+    return price.toString();
+  };
+
+  // Get user display name or email as fallback
+  const getUserDisplayName = () => {
+    if (user?.name) return user.name;
+    if (user?.displayName) return user.displayName;
+    if (user?.email) return user.email.split('@')[0]; // Use part before @ as name
+    return "Guest"; // Fallback if no identifiable name is available
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+    
+    if (!user || !user.uid) {
+      setFormErrors({
+        payment: "You must be logged in to complete this booking"
+      });
+      return;
+    }
+    
     setIsProcessing(true);
     
     try {
-      if (!user) {
-        throw new Error('User authentication required');
-      }
-
-      const bookingPayload = {
-        accommodationId: bookingDetails.accommodationId,
-        accommodationName: bookingDetails.accommodationName,
-        checkInDate: bookingDetails.checkInDate.toISOString(),
-        checkOutDate: bookingDetails.checkOutDate.toISOString(),
-        numberOfGuests: bookingDetails.numberOfGuests,
-        price: bookingDetails.price,
-        paymentId: reference.reference,
-        paymentStatus: 'completed',
-        paymentReference: {
-          ...reference,
-          processingDate: new Date().toISOString()
-        },
-        email: user.email,
-        userId: user.uid,
-        userName: user.displayName || user.email,
-        customerContact: user.phoneNumber || '',
-        bookingType: 'accommodation',
-        currency: 'ZAR',
-        status: 'confirmed',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      console.log('Debug Log: Creating booking with payload:', bookingPayload);
+      // Get accommodation details with fallbacks for undefined values
+      const accommodationId = bookingDetails?.accommodationId || "unknown";
+      const accommodationName = bookingDetails?.accommodationName || "Accommodation";
+      const numberOfGuests = bookingDetails?.numberOfGuests || 1;
+      const formattedPrice = formatPrice(bookingDetails?.price);
       
-      try {
-        const result = await dispatch(createBooking(bookingPayload)).unwrap();
-        console.log('Debug Log: Booking creation result:', result);
-        
-        if (result && result.id) {
-          // Create order in Firebase after successful booking
-          const orderPayload = {
-            ...bookingPayload,
-            bookingId: result.id,
-            orderType: 'accommodation',
-            orderStatus: 'confirmed'
-          };
-          
-          console.log('Debug Log: Creating order with payload:', orderPayload);
-          try {
-            const orderResult = await dispatch(createOrderAfterPayment(orderPayload)).unwrap();
-            console.log('Debug Log: Order creation result:', orderResult);
-            
-            console.log('Debug Log: Setting payment success state');
-            dispatch(setPaymentSuccess({ 
-              ...reference, 
-              bookingId: result.id 
-            }));
-          } catch (orderError) {
-            console.error('Debug Log: Order creation error:', orderError);
-            throw new Error(`Order creation failed: ${orderError.message}`);
-          }
-        } else {
-          throw new Error('Failed to create booking record - no ID returned');
-        }
-      } catch (bookingError) {
-        console.error('Debug Log: Booking creation error:', bookingError);
-        throw new Error(`Booking creation failed: ${bookingError.message}`);
-      }
+      // Get user details with fallbacks
+      const userId = user?.uid;
+      const userEmail = user?.email || "no-email@example.com";
+      const userName = getUserDisplayName();
+      
+      // First create the booking in Firestore
+      const bookingData = {
+        accommodationId,
+        accommodationName,
+        userId,
+        userEmail,
+        userName,
+        checkInDate: formatCheckInDate(bookingDetails?.checkInDate),
+        checkOutDate: formatCheckOutDate(bookingDetails?.checkOutDate),
+        numberOfGuests,
+        totalPrice: formattedPrice,
+        status: 'confirmed',
+        paymentStatus: 'completed',
+        createdAt: new Date().toISOString() // Ensure we always have this field
+      };
+      
+      console.log("Saving booking data:", bookingData);
+      
+      // Dispatch action to create booking
+      await dispatch(createBooking(bookingData)).unwrap();
+      
+      // Create order after successful booking
+      const orderData = {
+        userId,
+        userEmail,
+        userName,
+        accommodationId,
+        accommodationName,
+        totalAmount: formattedPrice,
+        paymentMethod: 'Credit Card',
+        paymentDetails: {
+          cardLastFour: paymentData.number.replace(/\s/g, '').slice(-4),
+          cardholderName: paymentData.name
+        },
+        status: 'completed',
+        createdAt: new Date().toISOString() // Ensure we always have this field
+      };
+      
+      console.log("Saving order data:", orderData);
+      
+      // Dispatch action to create order
+      await dispatch(createOrderAfterPayment(orderData)).unwrap();
+      
+      // Note: The useEffect will handle the success case
     } catch (error) {
-      console.error('Debug Log: Error in payment success handler:', error);
-      setError(error.message || 'Failed to process booking. Please contact support.');
+      console.error('Payment processing error:', error);
       setIsProcessing(false);
+      setFormErrors({
+        payment: error.message || 'Payment processing failed'
+      });
     }
-  };
-
-  const handlePaystackClose = () => {
-    console.log('Debug Log: Payment was cancelled by user');
-    setError('Payment was cancelled');
-    setIsProcessing(false);
-  };
-
-  const initializePaystack = usePaystackPayment(config);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setError('');
-    console.log('Debug Log: Payment submission initiated');
-    
-    try {
-      if (!user) {
-        navigate('/loginsignup');
-        return;
-      }
-
-      if (!bookingDetails?.checkInDate || !bookingDetails?.checkOutDate) {
-        setError('Please select check-in and check-out dates');
-        return;
-      }
-
-      if (!amount || amount <= 0) {
-        setError('Invalid payment amount');
-        return;
-      }
-
-      console.log('Debug Log: Initializing Paystack payment', config);
-      initializePaystack(onSuccess, handlePaystackClose);
-    } catch (error) {
-      console.error('Debug Log: Error initializing payment:', error);
-      setError('Failed to initialize payment. Please try again.');
-    }
-  };
-
-  const handleDone = () => {
-    console.log('Debug Log: Closing payment dialog');
-    dispatch(clearPaymentStatus());
-    onClose();
-  };
-
-  // Prevent closing the dialog by clicking outside when payment is successful
-  const handleDialogClose = (event, reason) => {
-    if (paymentSuccess) {
-      return; // Do nothing if payment is successful
-    }
-    onClose(); // Otherwise, close normally
   };
 
   return (
     <Dialog 
       open={open} 
-      onClose={handleDialogClose}
-      maxWidth="sm" 
+      onClose={isProcessing ? null : onClose}
+      maxWidth="sm"
       fullWidth
-      PaperProps={{
-        sx: { minHeight: '400px' }
-      }}
     >
-      <DialogTitle>
-        {paymentSuccess ? 'Booking Confirmed!' : 'Complete Your Booking'}
-      </DialogTitle>
+      <DialogTitle sx={{ color: 'black' }}>Payment Information</DialogTitle>
       <DialogContent>
-        {paymentSuccess ? (
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Alert severity="success" sx={{ mb: 3 }}>
-              Your payment was successful and your booking has been confirmed!
-            </Alert>
-            <Typography variant="body1" gutterBottom>
-              A confirmation email has been sent to your email address.
-            </Typography>
-            <Typography variant="body1" gutterBottom>
-              Booking Reference: {config.reference}
-            </Typography>
-          </Box>
+        {!user ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Please log in before completing your booking.
+          </Alert>
         ) : (
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-            {!user && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Please <Button color="inherit" onClick={() => navigate('/loginsignup')}>log in</Button> to complete your booking
-              </Alert>
+          <>
+            {bookingDetails && (
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" gutterBottom sx={{ color: 'black' }}>
+                  Booking Summary
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {bookingDetails.accommodationName || "Accommodation"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Check-in: {bookingDetails.checkInDate ? new Date(bookingDetails.checkInDate).toLocaleString() : 'Not specified'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Check-out: {bookingDetails.checkOutDate ? new Date(bookingDetails.checkOutDate).toLocaleString() : 'Not specified'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Guests: {bookingDetails.numberOfGuests || 1}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', mt: 1 }}>
+                  Total: {typeof bookingDetails.price === 'object' ? 
+                    `R ${bookingDetails.price.value || '0'}` : 
+                    `R ${bookingDetails.price || '0'}`}
+                </Typography>
+              </Box>
             )}
 
-            <Typography variant="h6" gutterBottom>
-              Booking Details
-            </Typography>
-            
-            <Typography variant="body1" gutterBottom>
-              Accommodation: {bookingDetails?.accommodationName || 'N/A'}
-            </Typography>
-            
-            <Typography variant="body1" gutterBottom>
-              Check-in: {bookingDetails?.checkInDate?.toLocaleString() || 'Not selected'}
-            </Typography>
-            
-            <Typography variant="body1" gutterBottom>
-              Check-out: {bookingDetails?.checkOutDate?.toLocaleString() || 'Not selected'}
-            </Typography>
-            
-            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-              Amount: R {amount / 100}
-            </Typography>
+            {/* Credit Card UI */}
+            <Card sx={{ mb: 3, bgcolor: '#f5f5f5', borderRadius: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ color: 'black', mb: 2 }}>
+                  Credit Card
+                </Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="body1" sx={{ color: 'black' }}>
+                    {paymentData.number || '•••• •••• •••• ••••'}
+                  </Typography>
+                  <Box>
+                    {/* Card brand logos could go here */}
+                  </Box>
+                </Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={8}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      CARDHOLDER NAME
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      {paymentData.name || 'Your Name'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={4}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      EXPIRES
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'black' }}>
+                      {paymentData.expiry || 'MM/YY'}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </CardContent>
+            </Card>
 
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="email"
-              label="Email Address"
-              name="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={!!user}
-              error={!!error && !email}
-              helperText={!email && error ? 'Email is required' : ''}
-            />
+            <Box sx={{ mb: 2 }}>
+              <TextField
+                label="Card Number"
+                name="number"
+                fullWidth
+                variant="outlined"
+                value={paymentData.number}
+                onChange={handleInputChange}
+                error={!!formErrors.number}
+                helperText={formErrors.number}
+                inputProps={{ maxLength: 19 }}
+                disabled={isProcessing}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <CreditCardIcon />
+                    </InputAdornment>
+                  ),
+                }}
+                placeholder="1234 5678 9012 3456"
+              />
+              
+              <TextField
+                label="Cardholder Name"
+                name="name"
+                fullWidth
+                variant="outlined"
+                value={paymentData.name}
+                onChange={handleInputChange}
+                error={!!formErrors.name}
+                helperText={formErrors.name}
+                disabled={isProcessing}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonIcon />
+                    </InputAdornment>
+                  ),
+                }}
+                placeholder="John Doe"
+              />
+              
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
+                  label="Expiry Date"
+                  name="expiry"
+                  variant="outlined"
+                  value={paymentData.expiry}
+                  onChange={handleInputChange}
+                  error={!!formErrors.expiry}
+                  helperText={formErrors.expiry}
+                  inputProps={{ maxLength: 5 }}
+                  disabled={isProcessing}
+                  sx={{ flexGrow: 1 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <DateRangeIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                  placeholder="MM/YY"
+                />
+                
+                <TextField
+                  label="CVC"
+                  name="cvc"
+                  variant="outlined"
+                  value={paymentData.cvc}
+                  onChange={handleInputChange}
+                  error={!!formErrors.cvc}
+                  helperText={formErrors.cvc}
+                  inputProps={{ maxLength: 3 }}
+                  disabled={isProcessing}
+                  sx={{ flexGrow: 1 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                  placeholder="123"
+                />
+              </Box>
+            </Box>
 
-            {error && (
+            {formErrors.payment && (
               <Alert severity="error" sx={{ mt: 2 }}>
-                {error}
+                {formErrors.payment}
               </Alert>
             )}
-          </Box>
+          </>
         )}
       </DialogContent>
       <DialogActions>
-        {paymentSuccess ? (
-          <Button 
-            onClick={handleDone}
-            variant="contained"
-            color="primary"
-            fullWidth
-          >
-            Done
-          </Button>
-        ) : (
-          <>
-            <Button onClick={onClose} disabled={isProcessing}>Cancel</Button>
-            <Button
-              onClick={handleSubmit}
-              variant="contained"
-              color="primary"
-              disabled={!user || !amount || isProcessing}
-            >
-              {isProcessing ? (
-                <>
-                  <CircularProgress size={20} sx={{ mr: 1 }} />
-                  Processing...
-                </>
-              ) : (
-                `Pay Now R ${amount / 100}`
-              )}
-            </Button>
-          </>
-        )}
+        <Button 
+          onClick={onClose} 
+          sx={{ color: 'black' }}
+          disabled={isProcessing}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          sx={{ bgcolor: 'black', '&:hover': { bgcolor: '#333' } }}
+          disabled={isProcessing || !user}
+        >
+          {isProcessing ? (
+            <CircularProgress size={24} color="inherit" />
+          ) : (
+            'Complete Payment'
+          )}
+        </Button>
       </DialogActions>
     </Dialog>
   );
-};
+}
 
 export default PaymentForm;

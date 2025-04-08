@@ -1,6 +1,17 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../service/Firebase';
+import { collection, addDoc } from 'firebase/firestore';
+
+// Define the initial state
+const initialState = {
+  paymentStatus: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
+  paymentError: null,
+  orderStatus: 'idle', // 'idle' | 'loading' | 'succeeded' | 'failed'
+  orderError: null,
+  orderId: null,
+  paymentSuccess: false,
+  paymentDetails: null,
+};
 
 // Create async thunk for creating order after payment
 export const createOrderAfterPayment = createAsyncThunk(
@@ -17,8 +28,12 @@ export const createOrderAfterPayment = createAsyncThunk(
       // Reference to the orders collection
       const ordersCollection = collection(db, 'orders');
       
-      // Add the order to Firestore
-      const orderRef = await addDoc(ordersCollection, orderData);
+      // Add the order to Firestore with timestamp
+      const orderRef = await addDoc(ordersCollection, {
+        ...orderData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
       
       console.log('Debug Log: Order created with ID:', orderRef.id);
       return {
@@ -27,64 +42,47 @@ export const createOrderAfterPayment = createAsyncThunk(
       };
     } catch (error) {
       console.error('Debug Log: Error creating order:', error);
-      return rejectWithValue(error.message);
+      return rejectWithValue(error.message || 'Failed to create order');
     }
   }
 );
 
+// Create the payment slice
 const paymentSlice = createSlice({
   name: 'payment',
-  initialState: {
-    status: 'idle',
-    error: null,
-    paymentSuccess: false,
-    paymentDetails: null,
-    orderStatus: 'idle',
-    orderDetails: null
-  },
+  initialState,
   reducers: {
     clearPaymentStatus: (state) => {
       console.log('Debug Log: Clearing payment status');
-      state.status = 'idle';
-      state.error = null;
-      state.paymentSuccess = false;
-      state.paymentDetails = null;
+      state.paymentStatus = 'idle';
+      state.paymentError = null;
       state.orderStatus = 'idle';
-      state.orderDetails = null;
+      state.orderError = null;
     },
     setPaymentSuccess: (state, action) => {
       console.log('Debug Log: Setting payment success', action.payload);
+      state.paymentStatus = 'succeeded';
       state.paymentSuccess = true;
       state.paymentDetails = action.payload;
-      state.status = 'succeeded';
-    },
+    }
   },
   extraReducers: (builder) => {
     builder
       .addCase(createOrderAfterPayment.pending, (state) => {
-        console.log('Debug Log: Order creation pending');
         state.orderStatus = 'loading';
       })
       .addCase(createOrderAfterPayment.fulfilled, (state, action) => {
-        console.log('Debug Log: Order creation fulfilled', action.payload);
         state.orderStatus = 'succeeded';
-        state.orderDetails = action.payload;
+        state.orderId = action.payload.id;
+        state.orderError = null;
       })
       .addCase(createOrderAfterPayment.rejected, (state, action) => {
-        console.log('Debug Log: Order creation rejected', action.payload);
         state.orderStatus = 'failed';
-        state.error = action.payload;
+        state.orderError = action.payload;
       });
   },
 });
 
+// Export actions and reducer
 export const { clearPaymentStatus, setPaymentSuccess } = paymentSlice.actions;
-
-export const selectPaymentStatus = (state) => state.payment.status;
-export const selectPaymentError = (state) => state.payment.error;
-export const selectPaymentSuccess = (state) => state.payment.paymentSuccess;
-export const selectPaymentDetails = (state) => state.payment.paymentDetails;
-export const selectOrderStatus = (state) => state.payment.orderStatus;
-export const selectOrderDetails = (state) => state.payment.orderDetails;
-
 export default paymentSlice.reducer;

@@ -4,6 +4,7 @@ import userReducer from './slices/userSlice';
 import bookingReducer from './slices/bookingSlice';
 import paymentReducer from './slices/PaymentSlice';
 import authsliceReducer from './slices/userSlice'
+import accommodationReducer from './slices/accommodationSlice';
 
 const store = configureStore({
   reducer: {
@@ -11,6 +12,7 @@ const store = configureStore({
     booking: bookingReducer,
     payment: paymentReducer,
     auth: authsliceReducer,
+    accommodation: accommodationReducer,
     
   },
 });
