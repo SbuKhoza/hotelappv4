@@ -204,7 +204,7 @@ function PaymentForm({ open, onClose, bookingDetails, onPaymentComplete }) {
       const userEmail = user?.email || "no-email@example.com";
       const userName = getUserDisplayName();
       
-      // First create the booking in Firestore
+      // First create the booking in Firestore - now with status 'pending' instead of 'confirmed'
       const bookingData = {
         accommodationId,
         accommodationName,
@@ -215,7 +215,7 @@ function PaymentForm({ open, onClose, bookingDetails, onPaymentComplete }) {
         checkOutDate: formatCheckOutDate(bookingDetails?.checkOutDate),
         numberOfGuests,
         totalPrice: formattedPrice,
-        status: 'confirmed',
+        status: 'pending', // Changed from 'confirmed' to 'pending'
         paymentStatus: 'completed',
         createdAt: new Date().toISOString() // Ensure we always have this field
       };
