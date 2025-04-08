@@ -6,7 +6,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../service/Firebase';
+import { auth, db } from '../../service/Firebase';
 
 // Async thunk for user signup
 export const signupUser = createAsyncThunk(

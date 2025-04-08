@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import IconButton from '@mui/material/IconButton';
@@ -9,6 +10,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import { styled } from '@mui/system';
+import { logoutUser } from '../redux/slices/authslice'; // Update with your actual path
 
 const StyledAppBar = styled(AppBar)(({ isHovered }) => ({
   backgroundColor: isHovered ? 'black' : 'transparent',
@@ -30,8 +32,11 @@ const StyledLink = styled(Link)({
 function Navbar() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [isHovered, setIsHovered] = useState(false); // Track hover state
-  const [loggedIn, setLoggedIn] = useState(false); // Simulate login state
-  const [userName, setUserName] = useState('John Doe'); // Simulate user name
+  
+  // Access auth state from Redux
+  const { user, isAuthenticated } = useSelector(state => state.auth);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const handleMenuOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -39,6 +44,11 @@ function Navbar() {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
+  };
+  
+  const handleLogout = () => {
+    dispatch(logoutUser());
+    navigate('/');
   };
 
   return (
@@ -62,9 +72,20 @@ function Navbar() {
           STEADY HOTEL
         </Typography>
 
-        <Button color="inherit">
-          {loggedIn ? userName : <StyledLink to="/loginsignup">Login/SignUP</StyledLink>}
-        </Button>
+        {/* Changed this part: Simple login/signup button or logout button */}
+        {isAuthenticated ? (
+          <Button 
+            color="inherit" 
+            onClick={handleLogout}
+            sx={{ textTransform: 'none' }}
+          >
+            Logout
+          </Button>
+        ) : (
+          <Button color="inherit">
+            <StyledLink to="/loginsignup">Get Started</StyledLink>
+          </Button>
+        )}
 
         <IconButton edge="end" color="inherit" onClick={handleMenuOpen}>
           <MenuIcon />
@@ -83,9 +104,11 @@ function Navbar() {
           <MenuItem onClick={handleMenuClose}>
             <StyledLink to="/contact">Contact us</StyledLink>
           </MenuItem>
-          <MenuItem onClick={handleMenuClose}>
-            <StyledLink to="/profile">My Dashboard</StyledLink>
-          </MenuItem>
+          {isAuthenticated && (
+            <MenuItem onClick={handleMenuClose}>
+              <StyledLink to="/profile">My Dashboard</StyledLink>
+            </MenuItem>
+          )}
         </Menu>
       </Toolbar>
     </StyledAppBar>
