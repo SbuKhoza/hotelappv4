@@ -1,65 +1,32 @@
-// PaymentSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../service/Firebase';
-
-// Create async thunk for handling payment success
-export const handlePaymentSuccess = createAsyncThunk(
-  'payment/handlePaymentSuccess',
-  async (paymentDetails, { dispatch }) => {
-    console.log('Payment success handler called with details:', paymentDetails);
-    try {
-      return paymentDetails;
-    } catch (error) {
-      console.error('Error in handlePaymentSuccess:', error);
-      throw error;
-    }
-  }
-);
 
 // Create async thunk for creating order after payment
 export const createOrderAfterPayment = createAsyncThunk(
   'payment/createOrderAfterPayment',
   async (orderData, { rejectWithValue }) => {
-    console.log('Starting createOrderAfterPayment with data:', orderData);
-    
+    console.log('Debug Log: Creating order after payment in Firebase', orderData);
     try {
       // Ensure db is properly initialized
-      console.log('Checking Firestore db object for orders:', db ? 'initialized' : 'not initialized');
-      
       if (!db) {
-        console.error('Firestore database not initialized for order creation');
+        console.error('Debug Log: Firestore database not initialized');
         throw new Error('Firestore database not initialized');
       }
-
+      
       // Reference to the orders collection
-      console.log('Creating reference to orders collection');
       const ordersCollection = collection(db, 'orders');
       
-      // Prepare data with server timestamp
-      const orderWithTimestamp = {
-        ...orderData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-
       // Add the order to Firestore
-      console.log('Attempting to add order to Firestore...');
-      const orderRef = await addDoc(ordersCollection, orderWithTimestamp);
+      const orderRef = await addDoc(ordersCollection, orderData);
       
-      console.log('Order created successfully with ID:', orderRef.id);
-
+      console.log('Debug Log: Order created with ID:', orderRef.id);
       return {
         id: orderRef.id,
-        ...orderData  // Keep original timestamps for UI display
+        ...orderData
       };
     } catch (error) {
-      console.error('Error creating order:', error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('Debug Log: Error creating order:', error);
       return rejectWithValue(error.message);
     }
   }
@@ -77,6 +44,7 @@ const paymentSlice = createSlice({
   },
   reducers: {
     clearPaymentStatus: (state) => {
+      console.log('Debug Log: Clearing payment status');
       state.status = 'idle';
       state.error = null;
       state.paymentSuccess = false;
@@ -85,6 +53,7 @@ const paymentSlice = createSlice({
       state.orderDetails = null;
     },
     setPaymentSuccess: (state, action) => {
+      console.log('Debug Log: Setting payment success', action.payload);
       state.paymentSuccess = true;
       state.paymentDetails = action.payload;
       state.status = 'succeeded';
@@ -92,26 +61,17 @@ const paymentSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(handlePaymentSuccess.pending, (state) => {
-        state.status = 'loading';
-      })
-      .addCase(handlePaymentSuccess.fulfilled, (state, action) => {
-        state.status = 'succeeded';
-        state.paymentSuccess = true;
-        state.paymentDetails = action.payload;
-      })
-      .addCase(handlePaymentSuccess.rejected, (state, action) => {
-        state.status = 'failed';
-        state.error = action.error.message;
-      })
       .addCase(createOrderAfterPayment.pending, (state) => {
+        console.log('Debug Log: Order creation pending');
         state.orderStatus = 'loading';
       })
       .addCase(createOrderAfterPayment.fulfilled, (state, action) => {
+        console.log('Debug Log: Order creation fulfilled', action.payload);
         state.orderStatus = 'succeeded';
         state.orderDetails = action.payload;
       })
       .addCase(createOrderAfterPayment.rejected, (state, action) => {
+        console.log('Debug Log: Order creation rejected', action.payload);
         state.orderStatus = 'failed';
         state.error = action.payload;
       });

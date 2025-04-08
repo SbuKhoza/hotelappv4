@@ -31,65 +31,56 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   const paymentSuccess = useSelector((state) => state.payment.paymentSuccess);
   const orderStatus = useSelector((state) => state.payment.orderStatus);
   const [email, setEmail] = useState('');
-  const [debugLog, setDebugLog] = useState([]);
 
-  // Helper function to add to debug log
-  const addDebugLog = (message) => {
-    console.log(message);
-    setDebugLog(prev => [...prev, `${new Date().toISOString().slice(11, 19)}: ${message}`]);
-  };
-
-  // Reset states when modal opens
+  // Debug logging
   useEffect(() => {
     if (open) {
+      console.log('Debug Log: Modal opened, states reset');
       setError('');
       setIsProcessing(false);
-      setDebugLog([]);
       dispatch(clearPaymentStatus());
-      addDebugLog('Modal opened, states reset');
     }
   }, [open, dispatch]);
 
   useEffect(() => {
     if (user?.email) {
       setEmail(user.email);
-      addDebugLog(`User email set: ${user.email}`);
     }
   }, [user]);
 
-  // Auto-close modal on successful payment after a brief delay to show success message
+  // Monitor payment success state
   useEffect(() => {
+    console.log('Debug Log: Payment success state changed:', paymentSuccess);
     if (paymentSuccess) {
-      addDebugLog('Payment success detected, preparing to close modal');
+      console.log('Debug Log: Payment success detected, preparing to close modal');
       // Add a slight delay before closing to show success message
       setTimeout(() => {
-        addDebugLog('Closing modal after success delay');
         onPaymentComplete && onPaymentComplete(paymentSuccess);
         handleDone();
       }, 3000); // Close after 3 seconds
     }
   }, [paymentSuccess, onPaymentComplete]);
 
-  // Handle booking status changes
+  // Monitor booking status
   useEffect(() => {
-    addDebugLog(`Booking status changed to: ${bookingStatus}`);
+    console.log('Debug Log: Booking status changed:', bookingStatus);
     if (bookingStatus === 'failed') {
       setError('Failed to create booking. Please contact support.');
       setIsProcessing(false);
-      addDebugLog('Booking creation failed');
     } else if (bookingStatus === 'succeeded') {
-      addDebugLog('Booking creation succeeded');
+      console.log('Debug Log: Booking creation succeeded');
       setIsProcessing(false);
     }
   }, [bookingStatus]);
 
-  // Handle order status changes
+  // Monitor order status
   useEffect(() => {
-    addDebugLog(`Order status changed to: ${orderStatus}`);
+    console.log('Debug Log: Order status changed:', orderStatus);
     if (orderStatus === 'failed') {
       setError('Failed to create order. Please contact support.');
       setIsProcessing(false);
-      addDebugLog('Order creation failed');
+    } else if (orderStatus === 'succeeded') {
+      console.log('Debug Log: Order creation succeeded');
     }
   }, [orderStatus]);
 
@@ -125,12 +116,11 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   };
 
   const onSuccess = async (reference) => {
+    console.log('Debug Log: Payment success callback received:', reference);
     setIsProcessing(true);
-    addDebugLog(`Payment successful with reference: ${reference.reference}`);
     
     try {
       if (!user) {
-        addDebugLog('Error: No user found');
         throw new Error('User authentication required');
       }
 
@@ -158,12 +148,11 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
         updatedAt: new Date().toISOString()
       };
 
-      addDebugLog('Creating booking with payload');
+      console.log('Debug Log: Creating booking with payload:', bookingPayload);
       
       try {
-        addDebugLog('Dispatching createBooking action');
         const result = await dispatch(createBooking(bookingPayload)).unwrap();
-        addDebugLog(`Booking created with ID: ${result?.id || 'unknown'}`);
+        console.log('Debug Log: Booking creation result:', result);
         
         if (result && result.id) {
           // Create order in Firebase after successful booking
@@ -174,35 +163,38 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
             orderStatus: 'confirmed'
           };
           
-          addDebugLog('Creating order after successful booking');
-          await dispatch(createOrderAfterPayment(orderPayload)).unwrap();
-          addDebugLog('Order created successfully');
-          
-          addDebugLog('Setting payment success status');
-          dispatch(setPaymentSuccess({ 
-            ...reference, 
-            bookingId: result.id 
-          }));
+          console.log('Debug Log: Creating order with payload:', orderPayload);
+          try {
+            const orderResult = await dispatch(createOrderAfterPayment(orderPayload)).unwrap();
+            console.log('Debug Log: Order creation result:', orderResult);
+            
+            console.log('Debug Log: Setting payment success state');
+            dispatch(setPaymentSuccess({ 
+              ...reference, 
+              bookingId: result.id 
+            }));
+          } catch (orderError) {
+            console.error('Debug Log: Order creation error:', orderError);
+            throw new Error(`Order creation failed: ${orderError.message}`);
+          }
         } else {
-          addDebugLog('Error: Invalid result from booking creation');
-          throw new Error('Failed to create booking record');
+          throw new Error('Failed to create booking record - no ID returned');
         }
-      } catch (dispatchError) {
-        addDebugLog(`Error in dispatch: ${dispatchError.message}`);
-        throw dispatchError;
+      } catch (bookingError) {
+        console.error('Debug Log: Booking creation error:', bookingError);
+        throw new Error(`Booking creation failed: ${bookingError.message}`);
       }
     } catch (error) {
-      console.error('Error in payment success handler:', error);
-      addDebugLog(`Error processing payment: ${error.message}`);
+      console.error('Debug Log: Error in payment success handler:', error);
       setError(error.message || 'Failed to process booking. Please contact support.');
       setIsProcessing(false);
     }
   };
 
   const handlePaystackClose = () => {
+    console.log('Debug Log: Payment was cancelled by user');
     setError('Payment was cancelled');
     setIsProcessing(false);
-    addDebugLog('Payment cancelled by user');
   };
 
   const initializePaystack = usePaystackPayment(config);
@@ -210,38 +202,34 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
-    addDebugLog('Payment submission initiated');
+    console.log('Debug Log: Payment submission initiated');
     
     try {
       if (!user) {
-        addDebugLog('No user logged in, redirecting to login');
         navigate('/loginsignup');
         return;
       }
 
       if (!bookingDetails?.checkInDate || !bookingDetails?.checkOutDate) {
-        addDebugLog('Missing dates');
         setError('Please select check-in and check-out dates');
         return;
       }
 
       if (!amount || amount <= 0) {
-        addDebugLog('Invalid amount');
         setError('Invalid payment amount');
         return;
       }
 
-      addDebugLog('Initializing Paystack payment');
+      console.log('Debug Log: Initializing Paystack payment', config);
       initializePaystack(onSuccess, handlePaystackClose);
     } catch (error) {
-      console.error('Error initializing payment:', error);
-      addDebugLog(`Payment initialization error: ${error.message}`);
+      console.error('Debug Log: Error initializing payment:', error);
       setError('Failed to initialize payment. Please try again.');
     }
   };
 
   const handleDone = () => {
-    addDebugLog('Handling done - clearing payment status');
+    console.log('Debug Log: Closing payment dialog');
     dispatch(clearPaymentStatus());
     onClose();
   };
@@ -249,10 +237,8 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
   // Prevent closing the dialog by clicking outside when payment is successful
   const handleDialogClose = (event, reason) => {
     if (paymentSuccess) {
-      addDebugLog('Preventing dialog close - payment success in progress');
       return; // Do nothing if payment is successful
     }
-    addDebugLog('Dialog closing normally');
     onClose(); // Otherwise, close normally
   };
 
@@ -329,20 +315,6 @@ const PaymentForm = ({ open, onClose, bookingDetails, onPaymentComplete }) => {
               <Alert severity="error" sx={{ mt: 2 }}>
                 {error}
               </Alert>
-            )}
-            
-            {/* Debug Log Display (you can comment this out in production) */}
-            {debugLog.length > 0 && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1, maxHeight: 150, overflow: 'auto' }}>
-                <Typography variant="caption" component="div" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                  Debug Log:
-                </Typography>
-                {debugLog.map((log, i) => (
-                  <Typography key={i} variant="caption" component="div" sx={{ fontFamily: 'monospace' }}>
-                    {log}
-                  </Typography>
-                ))}
-              </Box>
             )}
           </Box>
         )}
